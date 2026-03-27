@@ -1,9 +1,9 @@
 # Airfoil Tools
 
 [![Release EXE](https://img.shields.io/github/v/release/giuliodori/airfoil-tools)](dist/airfoil-tools.exe)
-[![License](https://img.shields.io/github/license/giuliodori/airfoil-tools)](LICENSE)
 
-Airfoil Tools e' una GUI desktop per generare profili NACA a 4 cifre: la forma "a goccia" piu' aerodinamica, classico dell'aerodinamica usato in ali, idrofoil e superfici portanti. Esporta in `.pts` e `.dxf` e stima `lift` e `drag`.
+
+Airfoil Tools e' una GUI desktop per generare profili NACA a 4 cifre, classico profilo dell'aerodinamica usato in ali, idrofoil e superfici portanti. Esporta in `.pts` e `.dxf` e stima `lift` e `drag`.
 
 ![gui](images/gui.png)
 ![Manta](images/manta.jpg)
@@ -103,7 +103,7 @@ Esempio:
 
 Equazioni (x = x/c):
 
-![NACA 4-digit equations](images/naca-equations.svg)
+![NACA 4-digit equations](images/naca-equations.png)
 
 ### Come si leggono al volo e dove si usano
 
