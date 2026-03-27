@@ -1,3 +1,8 @@
+# SPDX-License-Identifier: GPL-3.0-only OR LicenseRef-Duilio-Commercial
+#
+# This file is part of Airfoil Tools.
+# See LICENSE and COMMERCIAL-LICENSE.md for details.
+
 import math
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
