@@ -3,7 +3,7 @@
 [![Release EXE](https://img.shields.io/github/v/release/giuliodori/airfoil-tools)](dist/airfoil-tools.exe)
 [![License](https://img.shields.io/github/license/giuliodori/airfoil-tools)](LICENSE)
 
-Airfoil Tools e' una GUI desktop per generare profili NACA a 4 cifre, esportarli in `.pts` e `.dxf`, e stimare `lift` e `drag`.
+Airfoil Tools e' una GUI desktop per generare profili NACA a 4 cifre: la forma "a goccia" piu' aerodinamica, classico dell'aerodinamica usato in ali, idrofoil e superfici portanti. Esporta in `.pts` e `.dxf` e stima `lift` e `drag`.
 
 ![gui](images/gui.png)
 ![Manta](images/manta.jpg)
@@ -87,7 +87,7 @@ Su Windows puoi anche usare:
 
 ## Note sui profili NACA 4 cifre
 
-I profili NACA 4 cifre sono una famiglia storica di profili alari definita da quattro numeri che descrivono in modo semplice la geometria. Sono ancora molto usati per studio preliminare, didattica e comparazioni rapide.
+I profili NACA a 4 cifre sono una famiglia storica di profili alari descritta da quattro numeri che codificano la geometria in modo semplice e riproducibile. Restano un riferimento solido per studio preliminare, didattica e comparazioni rapide: sono facili da comunicare, da generare e da confrontare.
 
 ### Significato delle cifre
 
@@ -101,7 +101,11 @@ Esempio:
 
 `NACA 2412` significa camber massimo 2% a 40% di corda, spessore 12%.
 
-### Quali profili sono piu' usati e per dove
+Equazioni (x = x/c):
+
+![NACA 4-digit equations](images/naca-equations.svg)
+
+### Come si leggono al volo e dove si usano
 
 Profili simmetrici (camber zero) per applicazioni dove serve comportamento simmetrico:
 
