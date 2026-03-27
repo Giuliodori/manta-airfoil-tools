@@ -2,6 +2,7 @@
 """Release helper for Airfoil Tools.
 
 Usage:
+  python release_tool/release_tool.py
   python release_tool/release_tool.py build
   python release_tool/release_tool.py clean
 """
@@ -65,7 +66,13 @@ def do_clean(root: Path) -> None:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Build and clean Airfoil Tools release artifacts")
-    parser.add_argument("command", choices=["build", "clean"], help="Action to execute")
+    parser.add_argument(
+        "command",
+        nargs="?",
+        default="build",
+        choices=["build", "clean"],
+        help="Action to execute (default: build)",
+    )
     return parser.parse_args()
 
 

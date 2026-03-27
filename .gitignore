@@ -1,0 +1,11 @@
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Build artifacts
+build/
+
+# Keep the packaged executable, ignore the rest of dist
+dist/*
+!dist/.gitkeep
+!dist/*.exe
