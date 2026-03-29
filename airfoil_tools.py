@@ -12,11 +12,13 @@ import numpy as np
 from airfoil_library import get_airfoil_parameters
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
+from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
 
 FLUID_PRESETS = {
     "air": {"rho": 1.225, "mu": 1.81e-5},
     "water": {"rho": 997.0, "mu": 8.9e-4},
+    "salt water": {"rho": 1025.0, "mu": 1.08e-3},
 }
 
 
@@ -75,6 +77,14 @@ def compute_lift_drag(density: float, velocity: float, area: float, cl: float, c
     drag = q * area * cd
     ld_ratio = lift / drag if abs(drag) > 1e-12 else float("inf")
     return lift, drag, ld_ratio
+
+
+def compute_flow_arrow_length(span_ref_mm: float, velocity_kmh: float):
+    """Scales the 2D flow arrow length with the configured speed."""
+    base_len = max(span_ref_mm * 0.44, 48.0)
+    speed = max(float(velocity_kmh), 0.0)
+    speed_scale = 0.65 + min(speed, 300.0) / 300.0 * 1.1
+    return base_len * speed_scale
 
 
 def naca4_points_components(code: str, n_side: int = 100, chord: float = 1.0):
@@ -136,6 +146,89 @@ def close_profile(x, y):
         x = np.append(x, x[0])
         y = np.append(y, y[0])
     return x, y
+
+
+def strip_duplicate_closing_point(x, y):
+    """Removes duplicated last point from a closed 2D contour."""
+    x = np.array(x, dtype=float)
+    y = np.array(y, dtype=float)
+    if len(x) == 0:
+        return x, y
+    if np.isclose(x[0], x[-1]) and np.isclose(y[0], y[-1]):
+        return x[:-1], y[:-1]
+    return x, y
+
+
+def profile_xy_to_section_vertices(x, y, z):
+    """Converts a 2D profile into 3D section vertices at constant z."""
+    x = np.array(x, dtype=float)
+    y = np.array(y, dtype=float)
+    z_vals = np.full_like(x, float(z), dtype=float)
+    return np.column_stack([x, y, z_vals])
+
+
+def build_extruded_mesh(x, y, span):
+    """Builds a lightweight side-surface extrusion mesh along +Z."""
+    if span <= 0:
+        raise ValueError("Span must be greater than zero.")
+
+    x, y = strip_duplicate_closing_point(x, y)
+    if len(x) < 3:
+        raise ValueError("Profile must contain at least 3 unique points.")
+
+    root = profile_xy_to_section_vertices(x, y, 0.0)
+    tip = profile_xy_to_section_vertices(x, y, span)
+
+    side_quads = []
+    tol = 1e-12
+    count = len(root)
+    for i in range(count):
+        j = (i + 1) % count
+        edge_len = np.linalg.norm(root[j] - root[i])
+        if edge_len <= tol:
+            continue
+        side_quads.append([root[i], root[j], tip[j], tip[i]])
+
+    if not side_quads:
+        raise ValueError("Unable to build 3D mesh from the current profile.")
+
+    return {
+        "root": root,
+        "tip": tip,
+        "side_quads": side_quads,
+        "root_cap": root[::-1],
+        "tip_cap": tip,
+    }
+
+
+def compute_display_limits_3d(points_xyz_mm, pad_ratio_xy=0.12, pad_ratio_z=0.08, min_pad_mm=3.0):
+    """Returns per-axis display limits with light dynamic padding."""
+    pts = np.asarray(points_xyz_mm, dtype=float)
+    if pts.ndim != 2 or pts.shape[1] != 3 or len(pts) == 0:
+        raise ValueError("3D display limits require Nx3 points.")
+
+    mins = pts.min(axis=0)
+    maxs = pts.max(axis=0)
+    spans = np.maximum(maxs - mins, 1e-9)
+
+    pad_x = max(spans[0] * pad_ratio_xy, min_pad_mm)
+    pad_y = max(spans[1] * pad_ratio_xy, min_pad_mm)
+    pad_z = max(spans[2] * pad_ratio_z, min_pad_mm)
+
+    xlim = (mins[0] - pad_x, maxs[0] + pad_x)
+    ylim = (mins[1] - pad_y, maxs[1] + pad_y)
+    zlim = (mins[2] - pad_z, maxs[2] + pad_z)
+    aspect = (
+        max(xlim[1] - xlim[0], 1.0),
+        max(ylim[1] - ylim[0], 1.0),
+        max(zlim[1] - zlim[0], 1.0),
+    )
+    return {
+        "xlim": xlim,
+        "ylim": ylim,
+        "zlim": zlim,
+        "aspect": aspect,
+    }
 
 
 def build_base_airfoil_xy(code: str, n_side: int = 100, chord: float = 1.0):
@@ -373,10 +466,10 @@ class App:
     def __init__(self, root):
         self.root = root
         self.root.title("Airfoil Tools")
-        self.root.geometry("1180x730")
         self.logo_image = None
         self.set_window_icon()
         self.setup_dark_theme()
+        self.configure_initial_window_size()
 
         self._update_job = None
         self._syncing_code = False
@@ -386,10 +479,31 @@ class App:
         self.last_pts_text = ""
         self.last_x = None
         self.last_y = None
+        self.plot_mode = "2d"
+        self._pan_state = None
+        self._default_3d_view = {"elev": 10, "azim": -102}
 
         self.update_mode_fields()
         self.update_fluid_fields()
         self.update_preview()
+
+    def configure_initial_window_size(self):
+        self.root.update_idletasks()
+        screen_w = max(self.root.winfo_screenwidth(), 1280)
+        screen_h = max(self.root.winfo_screenheight(), 800)
+
+        height = max(820, int(screen_h * 0.86))
+        window_ratio = (16 / 9) * 1.2
+        width = max(1320, int(height * window_ratio))
+
+        width = min(width, screen_w - 40)
+        height = min(height, screen_h - 80)
+
+        pos_x = max((screen_w - width) // 2, 0)
+        pos_y = max((screen_h - height) // 2, 0)
+
+        self.root.geometry(f"{width}x{height}+{pos_x}+{pos_y}")
+        self.root.minsize(1240, 720)
 
     def set_window_icon(self):
         icon_path = os.path.join("images", "ico.ico")
@@ -485,11 +599,14 @@ class App:
         main.bind("<Configure>", _update_scrollregion)
         self.page_canvas.bind("<Configure>", _update_width)
 
-        left = ttk.Frame(main)
-        left.pack(side="left", fill="y", padx=(0, 8))
+        main_panes = ttk.Panedwindow(main, orient="horizontal")
+        main_panes.pack(fill="both", expand=True)
+        self.main_panes = main_panes
 
-        right = ttk.Frame(main)
-        right.pack(side="left", fill="both", expand=True)
+        left = ttk.Frame(main_panes, padding=(0, 0, 8, 0))
+        right = ttk.Frame(main_panes)
+        main_panes.add(left, weight=0)
+        main_panes.add(right, weight=1)
 
         # Logo moved inside Aerodynamics panel (bottom-right under overrides)
 
@@ -678,8 +795,8 @@ class App:
         row += 1
         self.rotation_scale = tk.Scale(
             trans,
-            from_=-180,
-            to=180,
+            from_=-60,
+            to=60,
             orient="horizontal",
             variable=self.angle_var,
             showvalue=False,
@@ -722,7 +839,7 @@ class App:
         self.fluid_combo = ttk.Combobox(
             aero,
             textvariable=self.fluid_var,
-            values=["air", "water", "custom"],
+            values=["air", "water", "salt water", "custom"],
             state="readonly",
             width=10,
         )
@@ -904,17 +1021,42 @@ class App:
             justify="left",
         ).pack(anchor="w")
 
-        graph_frame = ttk.LabelFrame(right, text="Airfoil plot (live)", padding=8)
-        graph_frame.pack(fill="both", expand=True)
+        right_panes = ttk.Panedwindow(right, orient="vertical")
+        right_panes.pack(fill="both", expand=True)
+        self.right_panes = right_panes
+
+        graph_frame = ttk.LabelFrame(right_panes, text="Airfoil plot (live)", padding=8)
+        bottom_frame = ttk.Frame(right_panes)
+        right_panes.add(graph_frame, weight=4)
+        right_panes.add(bottom_frame, weight=1)
+
+        graph_toolbar = ttk.Frame(graph_frame)
+        graph_toolbar.pack(fill="x", pady=(0, 6))
+        ttk.Label(graph_toolbar, text="View").pack(side="left")
+        self.view_mode_var = tk.StringVar(value="2D")
+        self.view_mode_combo = ttk.Combobox(
+            graph_toolbar,
+            textvariable=self.view_mode_var,
+            values=["2D", "3D"],
+            state="readonly",
+            width=8,
+        )
+        self.view_mode_combo.pack(side="left", padx=(6, 0))
+        self.view_mode_combo.bind("<<ComboboxSelected>>", self.on_view_mode_changed)
 
         self.figure = Figure(figsize=(7, 4.8), dpi=100)
         self.ax = self.figure.add_subplot(111)
+        self.figure.subplots_adjust(left=0.035, right=0.985, bottom=0.055, top=0.955)
         self.configure_plot_theme()
 
         self.canvas = FigureCanvasTkAgg(self.figure, master=graph_frame)
         self.canvas.get_tk_widget().pack(fill="both", expand=True)
+        self.canvas.mpl_connect("scroll_event", self.on_plot_scroll)
+        self.canvas.mpl_connect("button_press_event", self.on_plot_button_press)
+        self.canvas.mpl_connect("button_release_event", self.on_plot_button_release)
+        self.canvas.mpl_connect("motion_notify_event", self.on_plot_mouse_move)
 
-        kpi_frame = ttk.LabelFrame(right, text="Flight KPIs", padding=10)
+        kpi_frame = ttk.LabelFrame(bottom_frame, text="Flight KPIs", padding=10)
         kpi_frame.pack(fill="x", expand=False, pady=(8, 0))
         kpi_frame.columnconfigure(1, weight=1)
         kpi_frame.columnconfigure(3, weight=1)
@@ -923,8 +1065,8 @@ class App:
         ttk.Label(kpi_frame, text="Drag [kg]").grid(row=0, column=2, sticky="w")
         ttk.Label(kpi_frame, textvariable=self.drag_out_var, style="KPIValueAlt.TLabel").grid(row=0, column=3, sticky="w", padx=(4, 0))
 
-        preview_frame = ttk.LabelFrame(right, text=".pts preview", padding=8)
-        preview_frame.pack(fill="x", expand=False, pady=(8, 0))
+        preview_frame = ttk.LabelFrame(bottom_frame, text=".pts preview", padding=8)
+        preview_frame.pack(fill="both", expand=True, pady=(8, 0))
 
         summary = ttk.Frame(preview_frame)
         summary.pack(fill="x", pady=(0, 4))
@@ -938,7 +1080,7 @@ class App:
             summary.pack_forget()
 
         text_row = ttk.Frame(preview_frame)
-        text_row.pack(fill="x", expand=False)
+        text_row.pack(fill="both", expand=True)
 
         self.text = tk.Text(
             text_row,
@@ -952,7 +1094,7 @@ class App:
             relief="flat",
             borderwidth=1,
         )
-        self.text.pack(side="left", fill="x", expand=True)
+        self.text.pack(side="left", fill="both", expand=True)
 
         yscroll = ttk.Scrollbar(text_row, orient="vertical", command=self.text.yview)
         yscroll.pack(side="right", fill="y")
@@ -963,16 +1105,198 @@ class App:
         footer = ttk.Label(right, text="© Fabio Giuliodori", style="Footer.TLabel")
         footer.pack(anchor="e", pady=(8, 0))
         self.setup_variable_sync()
+        self.root.after_idle(self.initialize_pane_layout)
 
     def configure_plot_theme(self):
         self.figure.patch.set_facecolor(self.colors["plot_bg"])
         self.ax.set_facecolor(self.colors["plot_bg"])
         self.ax.tick_params(colors=self.colors["fg"])
-        for spine in self.ax.spines.values():
-            spine.set_color(self.colors["muted"])
+        if hasattr(self.ax, "spines"):
+            for spine in self.ax.spines.values():
+                spine.set_color(self.colors["muted"])
         self.ax.title.set_color(self.colors["fg"])
         self.ax.xaxis.label.set_color(self.colors["fg"])
         self.ax.yaxis.label.set_color(self.colors["fg"])
+        if hasattr(self.ax, "zaxis"):
+            self.ax.zaxis.label.set_color(self.colors["fg"])
+            for axis in (self.ax.xaxis, self.ax.yaxis, self.ax.zaxis):
+                try:
+                    axis.pane.set_facecolor(self.colors["panel_alt"])
+                    axis.pane.set_edgecolor(self.colors["muted"])
+                except Exception:
+                    pass
+                try:
+                    axis._axinfo["grid"]["color"] = self.colors["grid"]
+                except Exception:
+                    pass
+
+    def configure_figure_layout(self, mode):
+        if mode == "3d":
+            self.figure.subplots_adjust(left=0.03, right=0.985, bottom=0.05, top=0.95)
+            try:
+                self.ax.set_position([0.015, 0.07, 0.97, 0.84])
+            except Exception:
+                pass
+        else:
+            self.figure.subplots_adjust(left=0.055, right=0.985, bottom=0.08, top=0.94)
+            try:
+                self.ax.set_position([0.06, 0.12, 0.91, 0.76])
+            except Exception:
+                pass
+
+    def ensure_plot_axes(self, mode):
+        projection = "3d" if mode == "3d" else None
+        current_name = getattr(self.ax, "name", "")
+        if current_name != ("3d" if mode == "3d" else "rectilinear"):
+            self.figure.delaxes(self.ax)
+            if projection is None:
+                self.ax = self.figure.add_subplot(111)
+            else:
+                self.ax = self.figure.add_subplot(111, projection=projection)
+        self.plot_mode = mode
+        self.configure_figure_layout(mode)
+        self.configure_plot_theme()
+
+    def on_view_mode_changed(self, event=None):
+        selected = self.view_mode_var.get().strip().upper()
+        mode = "3d" if selected == "3D" else "2d"
+        self.ensure_plot_axes(mode)
+        self.update_preview()
+
+    def initialize_pane_layout(self):
+        try:
+            self.root.update_idletasks()
+            total_width = max(self.main_panes.winfo_width(), 2)
+            self.main_panes.sashpos(0, total_width // 2)
+
+            total_height = max(self.right_panes.winfo_height(), 2)
+            self.right_panes.sashpos(0, int(total_height * 0.72))
+        except Exception:
+            pass
+
+    def on_plot_scroll(self, event):
+        if event.inaxes != self.ax:
+            return
+
+        button = getattr(event, "button", "")
+        step = getattr(event, "step", 0)
+        zoom_in = button == "up" or step > 0
+        scale = 1.0 / 1.15 if zoom_in else 1.15
+
+        if getattr(self.ax, "name", "") == "3d":
+            self.zoom_3d_axes(scale)
+        else:
+            self.zoom_2d_axes(scale, event.xdata, event.ydata)
+
+        self.canvas.draw_idle()
+
+    def on_plot_button_press(self, event):
+        if event.inaxes != self.ax or event.button != 1:
+            return
+
+        if getattr(self.ax, "name", "") == "3d":
+            self._pan_state = {
+                "mode": "3d",
+                "x": event.x,
+                "y": event.y,
+                "xlim": self.ax.get_xlim3d(),
+                "ylim": self.ax.get_ylim3d(),
+                "zlim": self.ax.get_zlim3d(),
+            }
+        else:
+            if event.xdata is None or event.ydata is None:
+                return
+            self._pan_state = {
+                "mode": "2d",
+                "xdata": event.xdata,
+                "ydata": event.ydata,
+                "xlim": self.ax.get_xlim(),
+                "ylim": self.ax.get_ylim(),
+            }
+
+    def on_plot_button_release(self, event):
+        if event.button == 1:
+            self._pan_state = None
+
+    def on_plot_mouse_move(self, event):
+        if not self._pan_state:
+            return
+        if event.inaxes != self.ax:
+            return
+
+        if self._pan_state["mode"] == "3d":
+            self.pan_3d_axes(event)
+        else:
+            self.pan_2d_axes(event)
+
+        self.canvas.draw_idle()
+
+    def zoom_2d_axes(self, scale, x_center=None, y_center=None):
+        xmin, xmax = self.ax.get_xlim()
+        ymin, ymax = self.ax.get_ylim()
+
+        if x_center is None:
+            x_center = 0.5 * (xmin + xmax)
+        if y_center is None:
+            y_center = 0.5 * (ymin + ymax)
+
+        new_xmin = x_center - (x_center - xmin) * scale
+        new_xmax = x_center + (xmax - x_center) * scale
+        new_ymin = y_center - (y_center - ymin) * scale
+        new_ymax = y_center + (ymax - y_center) * scale
+
+        self.ax.set_xlim(new_xmin, new_xmax)
+        self.ax.set_ylim(new_ymin, new_ymax)
+
+    def zoom_3d_axes(self, scale):
+        xlim = self.ax.get_xlim3d()
+        ylim = self.ax.get_ylim3d()
+        zlim = self.ax.get_zlim3d()
+
+        def _scaled_limits(limits):
+            lo, hi = limits
+            center = 0.5 * (lo + hi)
+            half = 0.5 * (hi - lo) * scale
+            min_half = 0.5
+            half = max(half, min_half)
+            return center - half, center + half
+
+        self.ax.set_xlim3d(*_scaled_limits(xlim))
+        self.ax.set_ylim3d(*_scaled_limits(ylim))
+        self.ax.set_zlim3d(*_scaled_limits(zlim))
+
+    def pan_2d_axes(self, event):
+        if event.xdata is None or event.ydata is None:
+            return
+
+        state = self._pan_state
+        dx = event.xdata - state["xdata"]
+        dy = event.ydata - state["ydata"]
+        xmin, xmax = state["xlim"]
+        ymin, ymax = state["ylim"]
+        self.ax.set_xlim(xmin - dx, xmax - dx)
+        self.ax.set_ylim(ymin - dy, ymax - dy)
+
+    def pan_3d_axes(self, event):
+        state = self._pan_state
+        dx_px = event.x - state["x"]
+        dy_px = event.y - state["y"]
+
+        xlim = state["xlim"]
+        ylim = state["ylim"]
+        zlim = state["zlim"]
+        x_span = xlim[1] - xlim[0]
+        y_span = ylim[1] - ylim[0]
+        z_span = zlim[1] - zlim[0]
+
+        pixel_ref = max(float(self.canvas.get_tk_widget().winfo_width()), float(self.canvas.get_tk_widget().winfo_height()), 1.0)
+        shift_x = -(dx_px / pixel_ref) * x_span
+        shift_y = (dy_px / pixel_ref) * y_span
+        shift_z = (dy_px / pixel_ref) * z_span * 0.35
+
+        self.ax.set_xlim3d(xlim[0] + shift_x, xlim[1] + shift_x)
+        self.ax.set_ylim3d(ylim[0] + shift_y, ylim[1] + shift_y)
+        self.ax.set_zlim3d(zlim[0] + shift_z, zlim[1] + shift_z)
 
     def mode_internal_value(self):
         return self.mode_map.get(self.mode_combo.get().strip(), "flat")
@@ -1173,12 +1497,16 @@ class App:
         code = self.code_var.get().strip()
         chord_mm = float(self.chord_var.get().replace(",", "."))
         chord = chord_mm / 1000.0
+        span_mm = float(self.span_var.get().replace(",", "."))
+        span = span_mm / 1000.0
         n_side = int(self.n_side_var.get())
         angle_deg = float(self.angle_var.get().replace(",", "."))
         decimals = int(self.decimals_var.get())
 
         if chord <= 0:
             raise ValueError("Chord must be greater than zero.")
+        if span <= 0:
+            raise ValueError("Span must be greater than zero.")
         if n_side < 2:
             raise ValueError("Points per side must be at least 2.")
         if decimals < 0 or decimals > 12:
@@ -1201,6 +1529,7 @@ class App:
             "mode": mode,
             "code": code,
             "chord": chord,
+            "span": span,
             "n_side": n_side,
             "radius": radius,
             "curvature_dir": curvature_dir,
@@ -1250,6 +1579,15 @@ class App:
         return max_force
 
     def redraw_plot(self, x, y, vals, aero):
+        plot_mode = "3d" if self.view_mode_var.get().strip().upper() == "3D" else "2d"
+        self.ensure_plot_axes(plot_mode)
+        if plot_mode == "3d":
+            self.redraw_plot_3d(x, y, vals)
+            return
+
+        self.redraw_plot_2d(x, y, vals, aero)
+
+    def redraw_plot_2d(self, x, y, vals, aero):
         self.ax.clear()
         self.ax.set_facecolor(self.colors["plot_bg"])
         x_mm = np.array(x) * 1000.0
@@ -1275,6 +1613,11 @@ class App:
         self.ax.title.set_color(self.colors["fg"])
         for spine in self.ax.spines.values():
             spine.set_color(self.colors["muted"])
+
+        try:
+            velocity_kmh = float(self.velocity_var.get().replace(",", "."))
+        except ValueError:
+            velocity_kmh = 0.0
 
         if len(x_mm) > 0:
             xmin, xmax = float(np.min(x_mm)), float(np.max(x_mm))
@@ -1332,7 +1675,7 @@ class App:
 
             flow_y = ymax + pad_y * 0.45
             flow_x0 = xmin - pad_x * 0.25
-            flow_x1 = flow_x0 + max(span_ref * 0.44, 48.0)
+            flow_x1 = flow_x0 + compute_flow_arrow_length(span_ref, velocity_kmh)
             self.ax.annotate(
                 "",
                 xy=(flow_x1, flow_y),
@@ -1355,7 +1698,99 @@ class App:
 
         self.canvas.draw_idle()
 
+    def redraw_plot_3d(self, x, y, vals):
+        self.ax.clear()
+        self.ax.set_facecolor(self.colors["plot_bg"])
+        mesh = build_extruded_mesh(x, y, vals["span"])
+        root_mm = mesh["root"] * 1000.0
+        tip_mm = mesh["tip"] * 1000.0
+        side_quads_mm = [[vertex * 1000.0 for vertex in quad] for quad in mesh["side_quads"]]
+        root_cap_mm = [vertex * 1000.0 for vertex in mesh["root_cap"]]
+        tip_cap_mm = [vertex * 1000.0 for vertex in mesh["tip_cap"]]
+
+        poly = Poly3DCollection(
+            side_quads_mm,
+            facecolors=self.colors["accent"],
+            edgecolors=self.colors["plot_bg"],
+            linewidths=0.35,
+            alpha=0.35,
+        )
+        self.ax.add_collection3d(poly)
+
+        cap_poly = Poly3DCollection(
+            [root_cap_mm, tip_cap_mm],
+            facecolors=["#8fb8ff", "#6fa0f2"],
+            edgecolors=self.colors["muted"],
+            linewidths=0.7,
+            alpha=0.48,
+        )
+        self.ax.add_collection3d(cap_poly)
+
+        root_closed = np.vstack([root_mm, root_mm[0]])
+        tip_closed = np.vstack([tip_mm, tip_mm[0]])
+        self.ax.plot(root_closed[:, 0], root_closed[:, 1], root_closed[:, 2], color=self.colors["accent"], linewidth=1.4)
+        self.ax.plot(tip_closed[:, 0], tip_closed[:, 1], tip_closed[:, 2], color=self.colors["accent_alt"], linewidth=1.4)
+
+        step = max(1, len(root_mm) // 24)
+        for i in range(0, len(root_mm), step):
+            rib = np.vstack([root_mm[i], tip_mm[i]])
+            self.ax.plot(rib[:, 0], rib[:, 1], rib[:, 2], color=self.colors["muted"], linewidth=0.7, alpha=0.8)
+
+        mode_txt = "Flat profile" if vals["mode"] == "flat" else "Curved profile"
+        title = (
+            f"NACA {vals['code']} | chord={vals['chord'] * 1000:.1f} mm | "
+            f"span={vals['span'] * 1000:.1f} mm | {mode_txt}"
+        )
+        self.ax.set_title(title)
+        self.ax.set_xlabel("X [mm]")
+        self.ax.set_ylabel("Y [mm]")
+        self.ax.set_zlabel("Z [mm]")
+        self.ax.grid(True, color=self.colors["grid"], alpha=0.7, linestyle="--", linewidth=0.6)
+        self.ax.tick_params(colors=self.colors["fg"])
+        self.ax.set_proj_type("persp")
+        try:
+            self.ax.set_anchor("C")
+        except Exception:
+            pass
+
+        xyz = np.vstack([root_mm, tip_mm])
+        display = compute_display_limits_3d(xyz)
+        self.ax.set_xlim(*display["xlim"])
+        self.ax.set_ylim(*display["ylim"])
+        self.ax.set_zlim(*display["zlim"])
+        try:
+            ax_span, ay_span, az_span = display["aspect"]
+            self.ax.set_box_aspect(
+                (ax_span * 1.45, ay_span * 0.62, az_span * 0.44),
+                zoom=1.18,
+            )
+        except TypeError:
+            try:
+                self.ax.set_box_aspect((ax_span * 1.45, ay_span * 0.62, az_span * 0.44))
+            except Exception:
+                pass
+        except Exception:
+            pass
+        self.ax.tick_params(axis="both", which="major", pad=0, labelsize=7)
+        try:
+            self.ax.zaxis.set_tick_params(pad=0, labelsize=7)
+        except Exception:
+            pass
+        try:
+            self.ax.yaxis.labelpad = 2
+            self.ax.zaxis.labelpad = 2
+            self.ax.xaxis.labelpad = 2
+        except Exception:
+            pass
+        self.ax.view_init(
+            elev=self._default_3d_view["elev"],
+            azim=self._default_3d_view["azim"],
+        )
+        self.configure_plot_theme()
+        self.canvas.draw_idle()
+
     def show_plot_error(self, msg):
+        self.ensure_plot_axes("2d")
         self.ax.clear()
         self.ax.set_facecolor(self.colors["plot_bg"])
         self.ax.text(0.5, 0.5, msg, ha="center", va="center", wrap=True, color=self.colors["fg"])
