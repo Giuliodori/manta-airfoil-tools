@@ -29,3 +29,19 @@ By contributing to this repository, you agree that your contributions may be use
 - a commercial license
 
 This ensures the project can continue to be dual-licensed.
+
+## Pull Request Guidelines
+
+- Keep changes small and focused.
+- Include a clear summary of what changed and why.
+- Add verification steps/commands in the PR description.
+- Update documentation when behavior or usage changes.
+
+## Local checks
+
+Run these before opening a PR:
+
+```bash
+python -m py_compile airfoil_tools.py airfoil_library.py release_tool/release_tool.py
+python -c "import airfoil_library; print('OK')"
+```

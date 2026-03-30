@@ -1,6 +1,7 @@
 # Airfoil Tools
 
 [![Latest Release](https://img.shields.io/github/v/release/giuliodori/airfoil-tools)](https://github.com/giuliodori/airfoil-tools/releases/latest)
+[![CI](https://img.shields.io/github/actions/workflow/status/giuliodori/airfoil-tools/ci.yml?branch=main)](https://github.com/giuliodori/airfoil-tools/actions)
 
 Airfoil Tools is a desktop GUI to generate 4-digit NACA profiles, a classic aerodynamic family used in wings, hydrofoils, and lifting surfaces.
 Fast export to `.pts` and `.dxf`, plus a quick estimate of `lift` and `drag` in a few steps.
@@ -10,6 +11,14 @@ Download the latest release exe:
 ```text
 https://github.com/giuliodori/airfoil-tools/releases/latest
 ```
+
+## Contribute in 3 steps
+
+1. Fork the repo and create a branch.
+2. Install requirements: `python -m pip install -r requirements.txt`
+3. Open a PR with a clear summary and verification steps.
+
+See `CONTRIBUTING.md` for details.
 
 ## Why it is useful
 
