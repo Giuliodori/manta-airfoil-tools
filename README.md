@@ -8,12 +8,6 @@ Fast export to `.pts`, `.csv`, `.dxf`, and `.stl` (with span-based extrusion for
 
 ![gui](images/gui.png)
 
-Download the latest release exe:
-
-```text
-https://github.com/giuliodori/airfoil-tools/releases/latest
-```
-
 
 ## Why it is useful
 
@@ -41,9 +35,13 @@ For most users, the executable is enough.
 
 ### 1) Download
 
-Download the exe from the latest release.
+Download the exe from the latest release here:
 
-If you cloned the repository source, note that `dist/airfoil-tools.exe` is a build artifact and may be absent until you create a release build.
+[![Latest Release](https://img.shields.io/github/v/release/giuliodori/airfoil-tools)](https://github.com/giuliodori/airfoil-tools/releases/latest)
+
+```text
+https://github.com/giuliodori/airfoil-tools/releases/latest
+```
 
 ### 2) Run
 
