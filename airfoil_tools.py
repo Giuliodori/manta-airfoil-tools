@@ -1194,10 +1194,10 @@ class App:
         actions.pack(fill="x", pady=(6, 0))
         actions.columnconfigure(0, weight=1)
         actions.columnconfigure(1, weight=1)
-        ttk.Button(actions, text="Update", command=self.update_preview).grid(row=0, column=0, sticky="ew", padx=(0, 4), pady=2)
+        ttk.Button(actions, text="Save .stl", command=self.save_stl).grid(row=0, column=0, sticky="ew", padx=(0, 4), pady=2)
         ttk.Button(actions, text="Save .pts", command=self.save_pts).grid(row=0, column=1, sticky="ew", pady=2)
         ttk.Button(actions, text="Save .dxf", command=self.save_dxf).grid(row=1, column=0, sticky="ew", padx=(0, 4), pady=2)
-        ttk.Button(actions, text="Save .stl", command=self.save_stl).grid(row=1, column=1, sticky="ew", pady=2)
+        ttk.Button(actions, text="Update", command=self.update_preview).grid(row=1, column=1, sticky="ew", pady=2)
         ttk.Button(actions, text="Copy preview", command=self.copy_preview).grid(row=2, column=0, columnspan=2, sticky="ew", pady=2)
 
         note = ttk.LabelFrame(left, text="Quick workflow", padding=8)
@@ -1294,7 +1294,11 @@ class App:
         xscroll.pack(fill="x", pady=(2, 0))
         self.text.configure(xscrollcommand=xscroll.set, yscrollcommand=yscroll.set)
 
-        footer = ttk.Label(right, text="© Fabio Giuliodori", style="Footer.TLabel")
+        footer = ttk.Label(
+            right,
+            text="Manta-Airlab | Fabio Giuliodori     Sponsored by www.duilio.cc ",
+            style="Footer.TLabel",
+        )
         footer.pack(anchor="e", pady=(8, 0))
         self.setup_variable_sync()
         self.root.after_idle(self.initialize_pane_layout)
@@ -1688,8 +1692,8 @@ class App:
         drag_kg = aero["drag"] / 9.80665
         self.lift_label_var.set("Downforce [kg]" if lift_kg < 0 else "Lift [kg]")
         self.drag_label_var.set("Drag [kg]")
-        self.lift_out_var.set(f"{lift_kg:.3f}")
-        self.drag_out_var.set(f"{drag_kg:.3f}")
+        self.lift_out_var.set(f"{lift_kg:.1f}")
+        self.drag_out_var.set(f"{drag_kg:.1f}")
         self.ld_out_var.set(f"{aero['ld_ratio']:.3f}")
 
     def get_values(self):
@@ -1796,7 +1800,10 @@ class App:
         self.ax.plot(x_mm, y_mm, marker=".", markersize=2, linewidth=1.3, color=line_color)
 
         mode_txt = "Flat profile" if vals["mode"] == "flat" else "Curved profile"
-        title = f"NACA {vals['code']} | chord={vals['chord'] * 1000:.1f} mm | {mode_txt}"
+        title = (
+            f"NACA {vals['code']} | chord={vals['chord'] * 1000:.1f} mm | "
+            f"span={vals['span'] * 1000:.1f} mm | {mode_txt}"
+        )
         if vals["mode"] == "curved":
             title += f" | R={vals['radius'] * 1000:.1f} mm"
         if vals["angle_deg"]:
