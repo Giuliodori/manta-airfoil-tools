@@ -1,4 +1,4 @@
-"""Manta AirLab by Duilio.cc — Fabio Giuliodori."""
+"""Manta AirLab by Duilio.cc ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â Fabio Giuliodori."""
 
 # SPDX-License-Identifier: GPL-3.0-only OR LicenseRef-Duilio-Commercial
 #
@@ -423,7 +423,7 @@ def build_curved_airfoil_xy(
     tx = np.cos(phi)
     ty = sign * np.sin(phi)
 
-    # local arc normal (rotated +90°)
+    # local arc normal (rotated +90ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â°)
     nx = -ty
     ny = tx
 
@@ -503,11 +503,50 @@ def write_pts_text(x, y, decimals: int = 6):
     return "\n".join(lines), x, y, z
 
 
-def write_dxf_polyline(path: str, x, y, layer: str = "AIRFOIL"):
-    """Export a closed contour as a 2D LWPOLYLINE on the XY plane."""
+def write_pts_xy_text(x, y, decimals: int = 6):
+    """PTS-style writer: x TAB y with no header."""
+    x, y = close_profile(x, y)
+    lines = []
+    for xv, yv in zip(x, y):
+        lines.append(
+            f"{format_number(float(xv), decimals)}\t"
+            f"{format_number(float(yv), decimals)}"
+        )
+    return "\n".join(lines), x, y, None
+
+
+def write_csv_xyz_text(x, y, decimals: int = 6):
+    """CSV writer: x,y,z with z=0 and no header."""
+    x, y = close_profile(x, y)
+    z = np.zeros_like(x)
+    lines = []
+    for xv, yv, zv in zip(x, y, z):
+        lines.append(
+            f"{format_number(float(xv), decimals)},"
+            f"{format_number(float(yv), decimals)},"
+            f"{format_number(float(zv), decimals)}"
+        )
+    return "\n".join(lines), x, y, z
+
+
+def write_csv_xy_text(x, y, decimals: int = 6):
+    """CSV writer: x,y with no header."""
+    x, y = close_profile(x, y)
+    lines = []
+    for xv, yv in zip(x, y):
+        lines.append(
+            f"{format_number(float(xv), decimals)},"
+            f"{format_number(float(yv), decimals)}"
+        )
+    return "\n".join(lines), x, y, None
+
+
+def _load_ezdxf(prompt_install: bool):
     try:
         import ezdxf
     except ImportError as exc:
+        if not prompt_install:
+            raise RuntimeError("DXF export requires 'ezdxf'. Install with: pip install ezdxf") from exc
         if _prompt_install(["ezdxf"], context="Needed to export DXF files."):
             if _run_pip_install(["ezdxf"]):
                 try:
@@ -524,7 +563,23 @@ def write_dxf_polyline(path: str, x, y, layer: str = "AIRFOIL"):
             raise RuntimeError(
                 "Library 'ezdxf' is not installed. Install with: pip install ezdxf"
             ) from exc
+    return ezdxf
 
+
+def _add_dxf_entity(msp, points_2d, layer: str, mode: str):
+    if mode == "polyline":
+        msp.add_lwpolyline(points_2d, format="xy", dxfattribs={"layer": layer, "closed": True})
+        return
+    spline = msp.add_spline(fit_points=points_2d, dxfattribs={"layer": layer})
+    try:
+        spline.closed = True
+    except Exception:
+        pass
+
+
+def write_dxf(path: str, x, y, layer: str = "AIRFOIL", mode: str = "spline"):
+    """Export a closed contour as DXF spline (default) or polyline."""
+    ezdxf = _load_ezdxf(prompt_install=True)
     x, y = close_profile(x, y)
 
     doc = ezdxf.new("R2010")
@@ -533,26 +588,31 @@ def write_dxf_polyline(path: str, x, y, layer: str = "AIRFOIL"):
 
     msp = doc.modelspace()
     points_2d = [(float(xv), float(yv)) for xv, yv in zip(x, y)]
-    msp.add_lwpolyline(points_2d, format="xy", dxfattribs={"layer": layer, "closed": True})
-
+    _add_dxf_entity(msp, points_2d, layer, mode=mode)
     doc.saveas(path)
+
+
+def write_dxf_cli(path: str, x, y, layer: str = "AIRFOIL", mode: str = "spline"):
+    """CLI DXF export: does not prompt for dependency installation."""
+    ezdxf = _load_ezdxf(prompt_install=False)
+    x, y = close_profile(x, y)
+    doc = ezdxf.new("R2010")
+    if layer not in doc.layers:
+        doc.layers.add(name=layer)
+    msp = doc.modelspace()
+    points_2d = [(float(xv), float(yv)) for xv, yv in zip(x, y)]
+    _add_dxf_entity(msp, points_2d, layer, mode=mode)
+    doc.saveas(path)
+
+
+def write_dxf_polyline(path: str, x, y, layer: str = "AIRFOIL"):
+    """Export as a 2D LWPOLYLINE on the XY plane."""
+    write_dxf(path, x, y, layer=layer, mode="polyline")
 
 
 def write_dxf_polyline_cli(path: str, x, y, layer: str = "AIRFOIL"):
-    """CLI DXF export: does not prompt for dependency installation."""
-    try:
-        import ezdxf
-    except ImportError as exc:
-        raise RuntimeError("DXF export requires 'ezdxf'. Install with: pip install ezdxf") from exc
-
-    x, y = close_profile(x, y)
-    doc = ezdxf.new("R2010")
-    if layer not in doc.layers:
-        doc.layers.add(name=layer)
-    msp = doc.modelspace()
-    points_2d = [(float(xv), float(yv)) for xv, yv in zip(x, y)]
-    msp.add_lwpolyline(points_2d, format="xy", dxfattribs={"layer": layer, "closed": True})
-    doc.saveas(path)
+    """CLI DXF export as polyline."""
+    write_dxf_cli(path, x, y, layer=layer, mode="polyline")
 
 
 def _triangle_normal(v1, v2, v3):
@@ -761,6 +821,79 @@ class App:
         logo_box.pack(fill="x", pady=(0, 6))
         ttk.Label(logo_box, image=self.logo_image).pack(anchor="w")
 
+    def open_advanced_options(self):
+        if self.advanced_window is not None:
+            try:
+                if self.advanced_window.winfo_exists():
+                    self.advanced_window.lift()
+                    self.advanced_window.focus_force()
+                    return
+            except Exception:
+                self.advanced_window = None
+
+        win = tk.Toplevel(self.root)
+        win.title("Advanced options")
+        win.configure(bg=self.colors["bg"])
+        win.resizable(False, False)
+        self.advanced_window = win
+
+        def _close():
+            try:
+                win.destroy()
+            finally:
+                self.advanced_window = None
+
+        win.protocol("WM_DELETE_WINDOW", _close)
+
+        outer = ttk.Frame(win, padding=12)
+        outer.pack(fill="both", expand=True)
+
+        export = ttk.LabelFrame(outer, text="Export formats", padding=10)
+        export.pack(fill="x")
+        export.columnconfigure(1, weight=1)
+
+        ttk.Label(export, text="DXF entity").grid(row=0, column=0, sticky="w", padx=(0, 6), pady=4)
+        dxf_combo = ttk.Combobox(
+            export,
+            textvariable=self.dxf_mode_var,
+            values=["spline", "polyline"],
+            state="readonly",
+            width=14,
+        )
+        dxf_combo.grid(row=0, column=1, sticky="ew", pady=4)
+
+        ttk.Label(export, text="PTS format").grid(row=1, column=0, sticky="w", padx=(0, 6), pady=4)
+        pts_combo = ttk.Combobox(
+            export,
+            textvariable=self.pts_format_var,
+            values=["xyz", "xy"],
+            state="readonly",
+            width=14,
+        )
+        pts_combo.grid(row=1, column=1, sticky="ew", pady=4)
+
+        ttk.Label(export, text="CSV format").grid(row=2, column=0, sticky="w", padx=(0, 6), pady=4)
+        csv_combo = ttk.Combobox(
+            export,
+            textvariable=self.csv_format_var,
+            values=["xyz", "xy"],
+            state="readonly",
+            width=14,
+        )
+        csv_combo.grid(row=2, column=1, sticky="ew", pady=4)
+
+        geom = ttk.LabelFrame(outer, text="Geometry (advanced)", padding=10)
+        geom.pack(fill="x", pady=(8, 0))
+        geom.columnconfigure(1, weight=1)
+        ttk.Label(geom, text="Points/side").grid(row=0, column=0, sticky="w", padx=(0, 6), pady=2)
+        e = ttk.Entry(geom, textvariable=self.n_side_var, width=10)
+        e.grid(row=0, column=1, sticky="ew", pady=2)
+        e.bind("<KeyRelease>", self.schedule_update)
+        ttk.Label(geom, text="Decimals").grid(row=1, column=0, sticky="w", padx=(0, 6), pady=2)
+        e = ttk.Entry(geom, textvariable=self.decimals_var, width=10)
+        e.grid(row=1, column=1, sticky="ew", pady=2)
+        e.bind("<KeyRelease>", self.schedule_update)
+
     def build_compact_layout(self):
         shell = ttk.Frame(self.root, padding=0)
         shell.pack(fill="both", expand=True)
@@ -810,6 +943,10 @@ class App:
         self.decimals_var = tk.StringVar(value=GUI_DEFAULTS["decimals"])
         self.mirror_x_var = tk.BooleanVar(value=GUI_DEFAULTS["mirror_x"])
         self.mirror_y_var = tk.BooleanVar(value=GUI_DEFAULTS["mirror_y"])
+        self.dxf_mode_var = tk.StringVar(value=GUI_DEFAULTS["dxf_mode"])
+        self.pts_format_var = tk.StringVar(value=GUI_DEFAULTS["pts_format"])
+        self.csv_format_var = tk.StringVar(value=GUI_DEFAULTS["csv_format"])
+        self.advanced_window = None
         # Advanced aerodynamic source toggle kept for future UI re-enable.
         # To restore it, add back the checkbox in the Aerodynamics panel and
         # switch `use_internal_library=True` in `compute_aero_results()` to this variable.
@@ -933,8 +1070,8 @@ class App:
         e = ttk.Entry(geom, textvariable=self.chord_var, width=10)
         e.grid(row=row, column=1, sticky="ew", pady=2)
         e.bind("<KeyRelease>", self.schedule_update)
-        ttk.Label(geom, text="Points/side").grid(row=row, column=2, sticky="w", padx=(8, 4), pady=2)
-        e = ttk.Entry(geom, textvariable=self.n_side_var, width=10)
+        ttk.Label(geom, text="Span [mm]").grid(row=row, column=2, sticky="w", padx=(8, 4), pady=2)
+        e = ttk.Entry(geom, textvariable=self.span_var, width=10)
         e.grid(row=row, column=3, sticky="ew", pady=2)
         e.bind("<KeyRelease>", self.schedule_update)
 
@@ -955,6 +1092,23 @@ class App:
             command=lambda _value: self.schedule_update(),
         )
         self.chord_scale.grid(row=row, column=0, columnspan=2, sticky="ew", pady=(0, 4))
+
+        self.span_scale = tk.Scale(
+            geom,
+            from_=10,
+            to=5000,
+            orient="horizontal",
+            variable=self.span_var,
+            showvalue=False,
+            resolution=1,
+            bg=self.colors["panel"],
+            fg=self.colors["fg"],
+            highlightthickness=0,
+            troughcolor=self.colors["entry"],
+            activebackground=self.colors["accent"],
+            command=lambda _value: self.schedule_update(),
+        )
+        self.span_scale.grid(row=row, column=2, columnspan=2, sticky="ew", pady=(0, 4))
 
         trans = ttk.LabelFrame(left, text="Curvature / Transform", padding=8)
         trans.pack(fill="x", pady=(6, 0))
@@ -978,7 +1132,19 @@ class App:
         self.curv_dir_combo.bind("<<ComboboxSelected>>", self.schedule_update)
 
         row += 1
-        ttk.Label(trans, text="Rotation [°]").grid(row=row, column=2, sticky="w", padx=(8, 4), pady=2)
+        ttk.Checkbutton(
+            trans,
+            text="Mirror X axis",
+            variable=self.mirror_x_var,
+            command=self.update_preview,
+        ).grid(row=row, column=0, sticky="w", padx=(0, 4), pady=2)
+        ttk.Checkbutton(
+            trans,
+            text="Mirror Y axis",
+            variable=self.mirror_y_var,
+            command=self.update_preview,
+        ).grid(row=row, column=1, sticky="w", pady=2)
+        ttk.Label(trans, text="Rotation [deg]").grid(row=row, column=2, sticky="w", padx=(8, 4), pady=2)
         e = ttk.Entry(trans, textvariable=self.angle_var, width=10)
         e.grid(row=row, column=3, sticky="ew", pady=2)
         e.bind("<KeyRelease>", self.schedule_update)
@@ -1000,24 +1166,6 @@ class App:
             command=lambda _value: self.schedule_update(),
         )
         self.rotation_scale.grid(row=row, column=2, columnspan=2, sticky="ew", pady=(0, 4))
-
-        row += 1
-        ttk.Label(trans, text="Decimals").grid(row=row, column=0, sticky="w", padx=(0, 4), pady=2)
-        e = ttk.Entry(trans, textvariable=self.decimals_var, width=10)
-        e.grid(row=row, column=1, sticky="ew", pady=2)
-        e.bind("<KeyRelease>", self.schedule_update)
-        ttk.Checkbutton(
-            trans,
-            text="Mirror X axis",
-            variable=self.mirror_x_var,
-            command=self.update_preview,
-        ).grid(row=row, column=2, sticky="w", padx=(8, 4), pady=2)
-        ttk.Checkbutton(
-            trans,
-            text="Mirror Y axis",
-            variable=self.mirror_y_var,
-            command=self.update_preview,
-        ).grid(row=row, column=3, sticky="w", pady=2)
 
         aero = ttk.LabelFrame(left, text="Aerodynamics", padding=8)
         aero.pack(fill="x", pady=(6, 0))
@@ -1066,38 +1214,12 @@ class App:
         )
         self.velocity_scale.grid(row=arow, column=2, columnspan=2, sticky="ew", pady=(22, 4))
 
-        arow += 1
-        ttk.Label(aero, text="Span [mm]").grid(row=arow, column=2, sticky="w", padx=(8, 4), pady=2)
-        e = ttk.Entry(aero, textvariable=self.span_var, width=10)
-        e.grid(row=arow, column=3, sticky="ew", pady=2)
-        e.bind("<KeyRelease>", self.schedule_update)
-
-        arow += 1
-        ttk.Label(aero, text="Density [kg/m³]").grid(row=arow, column=0, sticky="w", padx=(0, 4), pady=2)
-        # Advanced aerodynamic inputs remain instantiated so they can be made
-        # visible again without rebuilding the panel structure.
-        self.span_scale = tk.Scale(
-            aero,
-            from_=10,
-            to=5000,
-            orient="horizontal",
-            variable=self.span_var,
-            showvalue=False,
-            resolution=1,
-            bg=self.colors["panel"],
-            fg=self.colors["fg"],
-            highlightthickness=0,
-            troughcolor=self.colors["entry"],
-            activebackground=self.colors["accent"],
-            command=lambda _value: self.schedule_update(),
-        )
-        self.span_scale.grid(row=arow, column=2, columnspan=2, sticky="ew", pady=(0, 4))
 
         arow += 1
         self.density_entry = ttk.Entry(aero, textvariable=self.density_var, width=10)
         self.density_entry.grid(row=arow, column=1, sticky="ew", pady=2)
         self.density_entry.bind("<KeyRelease>", self.schedule_update)
-        ttk.Label(aero, text="Viscosity [Pa·s]").grid(row=arow, column=2, sticky="w", padx=(8, 4), pady=2)
+        ttk.Label(aero, text="Viscosity [PaÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â·s]").grid(row=arow, column=2, sticky="w", padx=(8, 4), pady=2)
         self.viscosity_entry = ttk.Entry(aero, textvariable=self.viscosity_var, width=10)
         self.viscosity_entry.grid(row=arow, column=3, sticky="ew", pady=2)
         self.viscosity_entry.bind("<KeyRelease>", self.schedule_update)
@@ -1117,7 +1239,7 @@ class App:
         e = ttk.Entry(aero, textvariable=self.override_cl_max_var, width=10)
         e.grid(row=arow, column=1, sticky="ew", pady=2)
         e.bind("<KeyRelease>", self.schedule_update)
-        ttk.Label(aero, text="Override α0°").grid(row=arow, column=2, sticky="w", padx=(8, 4), pady=2)
+        ttk.Label(aero, text="Override ÃƒÆ’Ã…Â½Ãƒâ€šÃ‚Â±0ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â°").grid(row=arow, column=2, sticky="w", padx=(8, 4), pady=2)
         e = ttk.Entry(aero, textvariable=self.override_alpha0_var, width=10)
         e.grid(row=arow, column=3, sticky="ew", pady=2)
         e.bind("<KeyRelease>", self.schedule_update)
@@ -1197,8 +1319,16 @@ class App:
         ttk.Button(actions, text="Save .stl", command=self.save_stl).grid(row=0, column=0, sticky="ew", padx=(0, 4), pady=2)
         ttk.Button(actions, text="Save .pts", command=self.save_pts).grid(row=0, column=1, sticky="ew", pady=2)
         ttk.Button(actions, text="Save .dxf", command=self.save_dxf).grid(row=1, column=0, sticky="ew", padx=(0, 4), pady=2)
-        ttk.Button(actions, text="Update", command=self.update_preview).grid(row=1, column=1, sticky="ew", pady=2)
-        ttk.Button(actions, text="Copy preview", command=self.copy_preview).grid(row=2, column=0, columnspan=2, sticky="ew", pady=2)
+        ttk.Button(actions, text="Save .csv", command=self.save_csv).grid(row=1, column=1, sticky="ew", pady=2)
+        ttk.Button(actions, text="Update", command=self.update_preview).grid(row=2, column=0, sticky="ew", padx=(0, 4), pady=2)
+        ttk.Button(actions, text="Copy preview", command=self.copy_preview).grid(row=2, column=1, sticky="ew", pady=2)
+        ttk.Button(actions, text="Advanced options", command=self.open_advanced_options).grid(
+            row=3,
+            column=0,
+            columnspan=2,
+            sticky="ew",
+            pady=(4, 2),
+        )
 
         note = ttk.LabelFrame(left, text="Quick workflow", padding=8)
         note.pack(fill="x", pady=(6, 0))
@@ -1207,7 +1337,7 @@ class App:
             text=(
                 "1) Enter NACA code and main parameters.\n"
                 "2) Check live plot and aero values.\n"
-                "3) Save .pts, .dxf, or .stl from Actions.\n"
+                "3) Save .pts, .dxf, .stl, or .csv from Actions.\n"
                 "4) Use 'Copy preview' for quick export."
             ),
             justify="left",
@@ -1257,8 +1387,8 @@ class App:
         ttk.Label(kpi_frame, textvariable=self.drag_label_var).grid(row=0, column=2, sticky="w")
         ttk.Label(kpi_frame, textvariable=self.drag_out_var, style="KPIValueAlt.TLabel").grid(row=0, column=3, sticky="w", padx=(4, 0))
 
-        preview_frame = ttk.LabelFrame(bottom_frame, text=".pts preview", padding=8)
-        preview_frame.pack(fill="both", expand=True, pady=(8, 0))
+        preview_frame = ttk.LabelFrame(bottom_frame, text="Points preview", padding=8)
+        preview_frame.pack(fill="x", expand=False, pady=(8, 0))
 
         summary = ttk.Frame(preview_frame)
         summary.pack(fill="x", pady=(0, 4))
@@ -1272,13 +1402,13 @@ class App:
             summary.pack_forget()
 
         text_row = ttk.Frame(preview_frame)
-        text_row.pack(fill="both", expand=True)
+        text_row.pack(fill="x", expand=False)
 
         self.text = tk.Text(
             text_row,
             wrap="none",
             font=("Consolas", 10),
-            height=6,
+            height=2,
             bg=self.colors["entry"],
             fg=self.colors["text"],
             insertbackground=self.colors["text"],
@@ -1286,7 +1416,7 @@ class App:
             relief="flat",
             borderwidth=1,
         )
-        self.text.pack(side="left", fill="both", expand=True)
+        self.text.pack(side="left", fill="x", expand=True)
 
         yscroll = ttk.Scrollbar(text_row, orient="vertical", command=self.text.yview)
         yscroll.pack(side="right", fill="y")
@@ -1528,9 +1658,8 @@ class App:
         # Advanced rows are currently hidden on purpose to keep the release UI
         # compact. To re-enable them, remove the target rows from
         # `always_hidden_rows` and optionally restore a visible Expert toggle.
-        # Row 1 keeps only the velocity slider visible; row 3 keeps only the
-        # span slider visible; rows 4+ are advanced.
-        always_hidden_rows = {4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
+        # Row 1 keeps only the velocity slider visible; rows 2+ are advanced.
+        always_hidden_rows = {2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
 
         for widget in self.aero_frame.grid_slaves():
             image_value = ""
@@ -1546,9 +1675,6 @@ class App:
             row = int(widget.grid_info().get("row", -1))
             column = int(widget.grid_info().get("column", -1))
             if row == 1 and column < 2:
-                widget.grid_remove()
-                continue
-            if row == 3 and column < 2:
                 widget.grid_remove()
                 continue
             if row in always_hidden_rows:
@@ -1749,7 +1875,11 @@ class App:
         try:
             vals = self.get_values()
             x, y = generate_airfoil_xy(vals)
-            pts_text, x, y, _ = write_pts_text(x, y, decimals=vals["decimals"])
+            pts_fmt = self.pts_format_var.get().strip().lower()
+            if pts_fmt == "xy":
+                pts_text, x, y, _ = write_pts_xy_text(x, y, decimals=vals["decimals"])
+            else:
+                pts_text, x, y, _ = write_pts_text(x, y, decimals=vals["decimals"])
             # With the UI convention, positive clockwise rotation corresponds to
             # positive aerodynamic angle of attack. Mirror X flips lift sign.
             # Mirror Y still disables aero because it reverses the profile
@@ -1807,7 +1937,7 @@ class App:
         if vals["mode"] == "curved":
             title += f" | R={vals['radius'] * 1000:.1f} mm"
         if vals["angle_deg"]:
-            title += f" | rot={vals['angle_deg']}°"
+            title += f" | rot={vals['angle_deg']}ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â°"
 
         self.ax.set_title(title)
         self.ax.set_xlabel("X [mm]")
@@ -2009,7 +2139,11 @@ class App:
         try:
             vals = self.get_values()
             x, y = generate_airfoil_xy(vals)
-            pts_text, _, _, _ = write_pts_text(x, y, decimals=vals["decimals"])
+            fmt = self.pts_format_var.get().strip().lower()
+            if fmt == "xy":
+                pts_text, _, _, _ = write_pts_xy_text(x, y, decimals=vals["decimals"])
+            else:
+                pts_text, _, _, _ = write_pts_text(x, y, decimals=vals["decimals"])
 
             default_name = f"NACA{vals['code']}.pts"
             path = filedialog.asksaveasfilename(
@@ -2028,6 +2162,33 @@ class App:
         except Exception as e:
             messagebox.showerror("Error", str(e))
 
+    def save_csv(self):
+        try:
+            vals = self.get_values()
+            x, y = generate_airfoil_xy(vals)
+            fmt = self.csv_format_var.get().strip().lower()
+            if fmt == "xy":
+                csv_text, _, _, _ = write_csv_xy_text(x, y, decimals=vals["decimals"])
+            else:
+                csv_text, _, _, _ = write_csv_xyz_text(x, y, decimals=vals["decimals"])
+
+            default_name = f"NACA{vals['code']}.csv"
+            path = filedialog.asksaveasfilename(
+                title="Save .csv file",
+                defaultextension=".csv",
+                initialfile=default_name,
+                filetypes=[("CSV files", "*.csv"), ("All files", "*.*")],
+            )
+            if not path:
+                return
+
+            with open(path, "w", encoding="utf-8", newline="\n") as f:
+                f.write(csv_text)
+
+            messagebox.showinfo("Saved", f"CSV saved successfully:\n{path}")
+        except Exception as e:
+            messagebox.showerror("Error", str(e))
+
     def save_dxf(self):
         try:
             vals = self.get_values()
@@ -2043,7 +2204,8 @@ class App:
             if not path:
                 return
 
-            write_dxf_polyline(path, x, y)
+            mode = self.dxf_mode_var.get().strip().lower()
+            write_dxf(path, x, y, mode=mode)
             messagebox.showinfo("Saved", f"DXF saved successfully:\n{path}")
         except Exception as e:
             messagebox.showerror("Error", str(e))
@@ -2116,13 +2278,31 @@ def build_cli_parser():
     )
     subparsers = parser.add_subparsers(dest="command")
 
-    export_cmd = subparsers.add_parser("export", help="Export NACA 4-digit profile to .pts, .dxf, or .stl.")
+    export_cmd = subparsers.add_parser("export", help="Export NACA 4-digit profile to .pts, .dxf, .stl, or .csv.")
     export_cmd.add_argument("code", help="NACA 4-digit code, e.g. 2412.")
     export_cmd.add_argument(
         "--format",
-        choices=["pts", "dxf", "stl"],
+        choices=["pts", "dxf", "stl", "csv"],
         default=CLI_DEFAULTS["export_format"],
         help="Output format (default: pts).",
+    )
+    export_cmd.add_argument(
+        "--dxf-mode",
+        choices=["spline", "polyline"],
+        default=CLI_DEFAULTS["dxf_mode"],
+        help="DXF entity type (default: spline).",
+    )
+    export_cmd.add_argument(
+        "--pts-format",
+        choices=["xyz", "xy"],
+        default=CLI_DEFAULTS["pts_format"],
+        help="PTS format (default: xyz).",
+    )
+    export_cmd.add_argument(
+        "--csv-format",
+        choices=["xyz", "xy"],
+        default=CLI_DEFAULTS["csv_format"],
+        help="CSV format (default: xyz).",
     )
     export_cmd.add_argument("-o", "--output", help="Output file path. Default: NACA<code>.<format>")
     export_cmd.add_argument(
@@ -2192,7 +2372,7 @@ def build_cli_parser():
         help="Fluid preset (default: water).",
     )
     analyze_cmd.add_argument("--density", type=float, help="Density [kg/m^3] for --fluid custom.")
-    analyze_cmd.add_argument("--viscosity", type=float, help="Dynamic viscosity [Pa·s] for --fluid custom.")
+    analyze_cmd.add_argument("--viscosity", type=float, help="Dynamic viscosity [PaÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â·s] for --fluid custom.")
 
     return parser
 
@@ -2230,11 +2410,23 @@ def run_cli(argv):
             fmt = args.format
             output = args.output or f"NACA{args.code}.{fmt}"
             if fmt == "pts":
-                pts_text, _, _, _ = write_pts_text(x, y, decimals=decimals)
+                pts_fmt = args.pts_format.strip().lower()
+                if pts_fmt == "xy":
+                    pts_text, _, _, _ = write_pts_xy_text(x, y, decimals=decimals)
+                else:
+                    pts_text, _, _, _ = write_pts_text(x, y, decimals=decimals)
                 with open(output, "w", encoding="utf-8", newline="\n") as f:
                     f.write(pts_text)
             elif fmt == "dxf":
-                write_dxf_polyline_cli(output, x, y)
+                write_dxf_cli(output, x, y, mode=args.dxf_mode.strip().lower())
+            elif fmt == "csv":
+                csv_fmt = args.csv_format.strip().lower()
+                if csv_fmt == "xy":
+                    csv_text, _, _, _ = write_csv_xy_text(x, y, decimals=decimals)
+                else:
+                    csv_text, _, _, _ = write_csv_xyz_text(x, y, decimals=decimals)
+                with open(output, "w", encoding="utf-8", newline="\n") as f:
+                    f.write(csv_text)
             else:
                 write_stl_ascii(output, x, y, span=span, solid_name=f"NACA{args.code}")
 
