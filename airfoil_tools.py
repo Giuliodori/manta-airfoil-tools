@@ -31,6 +31,76 @@ except ImportError:
 from airfoil_library import get_airfoil_parameters
 from defaults import CLI_DEFAULTS, FLUID_PRESETS, GUI_DEFAULTS
 
+THEME_PRESETS = {
+    "dark": {
+        "label": "Dark",
+        "colors": {
+            "bg": "#141414",
+            "panel": "#1b1b1b",
+            "panel_alt": "#232323",
+            "border": "#303030",
+            "fg": "#ececec",
+            "muted": "#9a9a9a",
+            "accent": "#c2c7cd",
+            "accent_alt": "#a7adb5",
+            "entry": "#101010",
+            "text": "#ececec",
+            "selection": "#2e3238",
+            "plot_bg": "#161616",
+            "grid": "#2f2f2f",
+            "button": "#262626",
+            "button_hover": "#2f2f2f",
+            "button_pressed": "#3a3a3a",
+            "button_text_active": "#ffffff",
+            "hero": "#1a1a1a",
+            "hero_accent": "#b7b7b7",
+            "hero_text": "#f3f3f3",
+            "subtle": "#8c8c8c",
+            "lift": "#4ec9b0",
+            "drag": "#f14c4c",
+            "plot_fill": "#686d73",
+            "plot_fill_alt": "#8a9097",
+        },
+    },
+    "light": {
+        "label": "Light",
+        "colors": {
+            "bg": "#f1f3f6",
+            "panel": "#ffffff",
+            "panel_alt": "#eef1f5",
+            "border": "#d4dbe4",
+            "fg": "#1f2933",
+            "muted": "#69798b",
+            "accent": "#2f7dd1",
+            "accent_alt": "#1e68b9",
+            "entry": "#f8f9fb",
+            "text": "#1f2933",
+            "selection": "#dce9f8",
+            "plot_bg": "#ffffff",
+            "grid": "#d9e1e8",
+            "button": "#f5f7fa",
+            "button_hover": "#ecf1f6",
+            "button_pressed": "#dfe8f2",
+            "button_text_active": "#1f1f1f",
+            "hero": "#ffffff",
+            "hero_accent": "#2f7dd1",
+            "hero_text": "#17324d",
+            "subtle": "#66778a",
+            "lift": "#16825d",
+            "drag": "#c72e0f",
+            "plot_fill": "#acd4fb",
+            "plot_fill_alt": "#6eaee8",
+        },
+    },
+}
+THEME_LABEL_TO_KEY = {
+    preset["label"]: key for key, preset in THEME_PRESETS.items()
+}
+THEME_KEY_TO_LABEL = {
+    key: preset["label"] for key, preset in THEME_PRESETS.items()
+}
+THEME_OPTION_LABELS = tuple(THEME_LABEL_TO_KEY.keys())
+
 
 def _prompt_install(packages, context=""):
     pkg_list = ", ".join(packages)
@@ -716,8 +786,13 @@ class App:
         self.root = root
         self.root.title("Airfoil Tools")
         self.logo_image = None
+        self.style = ttk.Style()
+        self.theme_var = tk.StringVar(
+            value=THEME_KEY_TO_LABEL.get(GUI_DEFAULTS["theme"], THEME_OPTION_LABELS[0])
+        )
+        self.tk_scale_widgets = []
         self.set_window_icon()
-        self.setup_dark_theme()
+        self.apply_theme(GUI_DEFAULTS["theme"])
         self.configure_initial_window_size()
 
         self._update_job = None
@@ -741,9 +816,9 @@ class App:
         screen_w = max(self.root.winfo_screenwidth(), 1280)
         screen_h = max(self.root.winfo_screenheight(), 800)
 
-        height = max(820, int(screen_h * 0.86))
+        height = max(800, int(screen_h * 0.9))
         window_ratio = (16 / 9) * 1.2
-        width = max(1320, int(height * window_ratio))
+        width = max(1260, int(height * window_ratio))
 
         width = min(width, screen_w - 40)
         height = min(height, screen_h - 80)
@@ -752,7 +827,7 @@ class App:
         pos_y = max((screen_h - height) // 2, 0)
 
         self.root.geometry(f"{width}x{height}+{pos_x}+{pos_y}")
-        self.root.minsize(1240, 720)
+        self.root.minsize(1160, 680)
 
     def set_window_icon(self):
         icon_path = os.path.join("images", "ico.ico")
@@ -763,43 +838,291 @@ class App:
         except Exception:
             pass
 
-    def setup_dark_theme(self):
-        self.colors = {
-            "bg": "#202124",
-            "panel": "#292a2d",
-            "panel_alt": "#3c4043",
-            "fg": "#e8eaed",
-            "muted": "#9aa0a6",
-            "accent": "#8ab4f8",
-            "accent_alt": "#669df6",
-            "entry": "#303134",
-            "text": "#e8eaed",
-            "plot_bg": "#202124",
-            "grid": "#5f6368",
-        }
+    def get_theme_key(self, theme_value):
+        if theme_value in THEME_PRESETS:
+            return theme_value
+        return THEME_LABEL_TO_KEY.get(theme_value, GUI_DEFAULTS["theme"])
+
+    def apply_theme(self, theme_value=None):
+        theme_key = self.get_theme_key(theme_value or self.theme_var.get())
+        self.colors = dict(THEME_PRESETS[theme_key]["colors"])
+        self.theme_var.set(THEME_KEY_TO_LABEL[theme_key])
         self.root.configure(bg=self.colors["bg"])
 
-        style = ttk.Style()
-        themes = style.theme_names()
+        themes = self.style.theme_names()
         if "clam" in themes:
-            style.theme_use("clam")
+            self.style.theme_use("clam")
 
-        style.configure(".", background=self.colors["bg"], foreground=self.colors["fg"])
-        style.configure("TFrame", background=self.colors["bg"])
-        style.configure("TLabel", background=self.colors["bg"], foreground=self.colors["fg"])
-        style.configure("TSeparator", background=self.colors["panel_alt"])
-        style.configure("TLabelframe", background=self.colors["panel"], borderwidth=1, relief="solid")
-        style.configure("TLabelframe.Label", background=self.colors["panel"], foreground=self.colors["fg"])
-        style.configure("TEntry", fieldbackground=self.colors["entry"], foreground=self.colors["text"], insertcolor=self.colors["text"])
-        style.configure("TCombobox", fieldbackground=self.colors["entry"], background=self.colors["entry"], foreground=self.colors["text"])
-        style.map("TCombobox", fieldbackground=[("readonly", self.colors["entry"])], foreground=[("readonly", self.colors["text"])])
-        style.configure("TCheckbutton", background=self.colors["panel"], foreground=self.colors["fg"])
-        style.map("TCheckbutton", background=[("active", self.colors["panel_alt"])], foreground=[("disabled", self.colors["muted"])])
-        style.configure("TButton", background=self.colors["panel_alt"], foreground=self.colors["fg"], borderwidth=1, focuscolor=self.colors["accent"], padding=(10, 6))
-        style.map("TButton", background=[("active", self.colors["accent"]), ("pressed", self.colors["accent_alt"])], foreground=[("active", "#ffffff")])
-        style.configure("KPIValue.TLabel", background=self.colors["panel"], foreground=self.colors["accent"], font=("Segoe UI", 20, "bold"))
-        style.configure("KPIValueAlt.TLabel", background=self.colors["panel"], foreground=self.colors["accent_alt"], font=("Segoe UI", 20, "bold"))
-        style.configure("Footer.TLabel", background=self.colors["bg"], foreground=self.colors["muted"], font=("Segoe UI", 9))
+        self.style.configure(".", background=self.colors["bg"], foreground=self.colors["fg"])
+        self.style.configure("TFrame", background=self.colors["bg"])
+        self.style.configure("TLabel", background=self.colors["panel"], foreground=self.colors["fg"], font=("Segoe UI", 9))
+        self.style.configure("TSeparator", background=self.colors["border"])
+        self.style.configure(
+            "TLabelframe",
+            background=self.colors["panel"],
+            borderwidth=1,
+            relief="solid",
+            bordercolor=self.colors["border"],
+            lightcolor=self.colors["border"],
+            darkcolor=self.colors["border"],
+        )
+        self.style.configure(
+            "TLabelframe.Label",
+            background=self.colors["panel"],
+            foreground=self.colors["fg"],
+            font=("Segoe UI Semibold", 10),
+        )
+        self.style.configure(
+            "TEntry",
+            fieldbackground=self.colors["entry"],
+            foreground=self.colors["text"],
+            insertcolor=self.colors["text"],
+            bordercolor=self.colors["border"],
+            lightcolor=self.colors["border"],
+            darkcolor=self.colors["border"],
+            padding=(6, 4),
+        )
+        self.style.map(
+            "TEntry",
+            fieldbackground=[
+                ("readonly", self.colors["entry"]),
+                ("disabled", self.colors["panel_alt"]),
+            ],
+            foreground=[
+                ("readonly", self.colors["text"]),
+                ("disabled", self.colors["muted"]),
+            ],
+        )
+        self.style.configure(
+            "TCombobox",
+            fieldbackground=self.colors["entry"],
+            background=self.colors["panel_alt"],
+            foreground=self.colors["text"],
+            arrowcolor=self.colors["fg"],
+            bordercolor=self.colors["border"],
+            lightcolor=self.colors["border"],
+            darkcolor=self.colors["border"],
+            padding=(6, 4),
+        )
+        self.style.map(
+            "TCombobox",
+            fieldbackground=[("readonly", self.colors["entry"])],
+            background=[("readonly", self.colors["panel_alt"])],
+            foreground=[
+                ("readonly", self.colors["text"]),
+                ("disabled", self.colors["muted"]),
+            ],
+            selectbackground=[("readonly", self.colors["selection"])],
+            selectforeground=[("readonly", self.colors["text"])],
+        )
+        self.style.configure(
+            "TCheckbutton",
+            background=self.colors["panel"],
+            foreground=self.colors["fg"],
+        )
+        self.style.map(
+            "TCheckbutton",
+            background=[("active", self.colors["panel_alt"])],
+            foreground=[("disabled", self.colors["muted"])],
+        )
+        self.style.configure(
+            "TButton",
+            background=self.colors["button"],
+            foreground=self.colors["fg"],
+            borderwidth=1,
+            focuscolor=self.colors["accent"],
+            bordercolor=self.colors["border"],
+            lightcolor=self.colors["border"],
+            darkcolor=self.colors["border"],
+            font=("Segoe UI Semibold", 9),
+            padding=(8, 5),
+        )
+        self.style.map(
+            "TButton",
+            background=[
+                ("active", self.colors["button_hover"]),
+                ("pressed", self.colors["button_pressed"]),
+            ],
+            foreground=[("active", self.colors["button_text_active"])],
+        )
+        self.style.configure(
+            "Accent.TButton",
+            background=self.colors["accent"],
+            foreground=self.colors["button_text_active"],
+            bordercolor=self.colors["accent"],
+            lightcolor=self.colors["accent"],
+            darkcolor=self.colors["accent"],
+        )
+        self.style.map(
+            "Accent.TButton",
+            background=[
+                ("active", self.colors["accent_alt"]),
+                ("pressed", self.colors["button_pressed"]),
+            ],
+            foreground=[("active", self.colors["button_text_active"])],
+        )
+        self.style.configure(
+            "Panel.TFrame",
+            background=self.colors["panel"],
+        )
+        self.style.configure(
+            "Panel.TLabel",
+            background=self.colors["panel"],
+            foreground=self.colors["fg"],
+            font=("Segoe UI", 9),
+        )
+        self.style.configure(
+            "Muted.TLabel",
+            background=self.colors["panel"],
+            foreground=self.colors["muted"],
+            font=("Segoe UI", 8),
+        )
+        self.style.configure(
+            "SummaryLabel.TLabel",
+            background=self.colors["panel"],
+            foreground=self.colors["muted"],
+            font=("Segoe UI", 8),
+        )
+        self.style.configure(
+            "SummaryValue.TLabel",
+            background=self.colors["panel"],
+            foreground=self.colors["fg"],
+            font=("Segoe UI Semibold", 9),
+        )
+        self.style.configure(
+            "Hero.TFrame",
+            background=self.colors["hero"],
+        )
+        self.style.configure(
+            "HeroTitle.TLabel",
+            background=self.colors["hero"],
+            foreground=self.colors["hero_text"],
+            font=("Segoe UI Semibold", 12),
+        )
+        self.style.configure(
+            "HeroBody.TLabel",
+            background=self.colors["hero"],
+            foreground=self.colors["subtle"],
+            font=("Segoe UI", 7),
+        )
+        self.style.configure(
+            "HeroMeta.TLabel",
+            background=self.colors["hero"],
+            foreground=self.colors["hero_accent"],
+            font=("Segoe UI", 7),
+        )
+        self.style.configure(
+            "HeroValue.TLabel",
+            background=self.colors["hero"],
+            foreground=self.colors["hero_text"],
+            font=("Segoe UI Semibold", 10),
+        )
+        self.style.configure(
+            "HeroSignature.TLabel",
+            background=self.colors["hero"],
+            foreground=self.colors["subtle"],
+            font=("Segoe UI", 7),
+        )
+        self.style.configure(
+            "Vertical.TScrollbar",
+            background=self.colors["panel_alt"],
+            troughcolor=self.colors["panel"],
+            arrowcolor=self.colors["fg"],
+            bordercolor=self.colors["border"],
+            lightcolor=self.colors["border"],
+            darkcolor=self.colors["border"],
+        )
+        self.style.configure(
+            "Horizontal.TScrollbar",
+            background=self.colors["panel_alt"],
+            troughcolor=self.colors["panel"],
+            arrowcolor=self.colors["fg"],
+            bordercolor=self.colors["border"],
+            lightcolor=self.colors["border"],
+            darkcolor=self.colors["border"],
+        )
+        self.style.configure(
+            "KPIValue.TLabel",
+            background=self.colors["panel"],
+            foreground=self.colors["lift"],
+            font=("Segoe UI", 16, "bold"),
+        )
+        self.style.configure(
+            "KPIValueAlt.TLabel",
+            background=self.colors["panel"],
+            foreground=self.colors["drag"],
+            font=("Segoe UI", 16, "bold"),
+        )
+        self.style.configure(
+            "Footer.TLabel",
+            background=self.colors["bg"],
+            foreground=self.colors["muted"],
+            font=("Segoe UI", 9),
+        )
+        self.refresh_theme_widgets()
+
+    def refresh_theme_widgets(self):
+        self.root.configure(bg=self.colors["bg"])
+        if getattr(self, "advanced_window", None) is not None:
+            try:
+                if self.advanced_window.winfo_exists():
+                    self.advanced_window.configure(bg=self.colors["bg"])
+            except Exception:
+                pass
+
+        if hasattr(self, "page_canvas"):
+            self.page_canvas.configure(bg=self.colors["bg"], highlightbackground=self.colors["bg"])
+        if hasattr(self, "code_entry"):
+            self.code_entry.configure(
+                bg=self.colors["entry"],
+                fg=self.colors["text"],
+                insertbackground=self.colors["text"],
+                disabledbackground=self.colors["panel_alt"],
+                disabledforeground=self.colors["muted"],
+                highlightbackground=self.colors["border"],
+                highlightcolor=self.colors["accent"],
+            )
+        if hasattr(self, "text"):
+            self.text.configure(
+                bg=self.colors["entry"],
+                fg=self.colors["text"],
+                insertbackground=self.colors["text"],
+                selectbackground=self.colors["selection"],
+                selectforeground=self.colors["text"],
+                highlightbackground=self.colors["border"],
+                highlightcolor=self.colors["accent"],
+            )
+        if hasattr(self, "canvas"):
+            try:
+                self.canvas.get_tk_widget().configure(
+                    background=self.colors["panel"],
+                    highlightbackground=self.colors["border"],
+                )
+            except Exception:
+                pass
+
+        for scale in self.tk_scale_widgets:
+            if scale is None:
+                continue
+            scale.configure(
+                bg=self.colors["panel"],
+                fg=self.colors["fg"],
+                highlightthickness=0,
+                highlightbackground=self.colors["panel"],
+                highlightcolor=self.colors["accent"],
+                troughcolor=self.colors["entry"],
+                activebackground=self.colors["accent"],
+            )
+
+        if hasattr(self, "canvas") and hasattr(self, "ax"):
+            if self.last_x is None or self.last_y is None:
+                self.configure_plot_theme()
+                self.canvas.draw_idle()
+            else:
+                self.update_preview()
+
+    def on_theme_changed(self, event=None):
+        self.apply_theme(self.theme_var.get())
 
     def build_logo_header(self, parent):
         logo_path = os.path.join("images", "logo_airfoil_tools.png")
@@ -845,7 +1168,7 @@ class App:
 
         win.protocol("WM_DELETE_WINDOW", _close)
 
-        outer = ttk.Frame(win, padding=12)
+        outer = ttk.Frame(win, padding=10)
         outer.pack(fill="both", expand=True)
 
         export = ttk.LabelFrame(outer, text="Export formats", padding=10)
@@ -894,6 +1217,25 @@ class App:
         e.grid(row=1, column=1, sticky="ew", pady=2)
         e.bind("<KeyRelease>", self.schedule_update)
 
+        appearance = ttk.LabelFrame(outer, text="Appearance", padding=10)
+        appearance.pack(fill="x", pady=(8, 0))
+        appearance.columnconfigure(1, weight=1)
+        ttk.Label(appearance, text="Theme", style="Panel.TLabel").grid(row=0, column=0, sticky="w", padx=(0, 6), pady=2)
+        theme_combo = ttk.Combobox(
+            appearance,
+            textvariable=self.theme_var,
+            values=THEME_OPTION_LABELS,
+            state="readonly",
+            width=18,
+        )
+        theme_combo.grid(row=0, column=1, sticky="ew", pady=2)
+        theme_combo.bind("<<ComboboxSelected>>", self.on_theme_changed)
+        ttk.Label(
+            appearance,
+            text="Choose the interface tone that feels more comfortable for long editing sessions.",
+            style="Muted.TLabel",
+        ).grid(row=1, column=0, columnspan=2, sticky="w", pady=(4, 0))
+
     def build_compact_layout(self):
         shell = ttk.Frame(self.root, padding=0)
         shell.pack(fill="both", expand=True)
@@ -920,6 +1262,30 @@ class App:
 
         main.bind("<Configure>", _update_scrollregion)
         self.page_canvas.bind("<Configure>", _update_width)
+
+        self.header_profile_var = tk.StringVar(value="NACA 2412")
+        self.header_status_var = tk.StringVar(value="Flat profile | chord 100 mm | span 200 mm")
+        self.preview_mode_var = tk.StringVar(value="Flat")
+        self.preview_points_var = tk.StringVar(value="-")
+        self.preview_format_var = tk.StringVar(value=GUI_DEFAULTS["pts_format"].upper())
+
+        header = ttk.Frame(main, style="Hero.TFrame", padding=(10, 5))
+        header.pack(fill="x", pady=(0, 6))
+        header.columnconfigure(0, weight=1)
+        header.columnconfigure(1, weight=0)
+
+        header_left = ttk.Frame(header, style="Hero.TFrame")
+        header_left.grid(row=0, column=0, sticky="nsew")
+        title_row = ttk.Frame(header_left, style="Hero.TFrame")
+        title_row.pack(anchor="w")
+        ttk.Label(title_row, text="Airfoil Tools", style="HeroTitle.TLabel").pack(side="left")
+        ttk.Label(title_row, text="by Fabio Giuliodori", style="HeroSignature.TLabel").pack(side="left", padx=(8, 0), pady=(2, 0))
+
+        header_right = ttk.Frame(header, style="Hero.TFrame", padding=(10, 0, 0, 0))
+        header_right.grid(row=0, column=1, sticky="e")
+        ttk.Label(header_right, text="Current profile", style="HeroMeta.TLabel").pack(anchor="e")
+        ttk.Label(header_right, textvariable=self.header_profile_var, style="HeroValue.TLabel").pack(anchor="e")
+        ttk.Label(header_right, textvariable=self.header_status_var, style="HeroBody.TLabel").pack(anchor="e")
 
         main_panes = ttk.Panedwindow(main, orient="horizontal")
         main_panes.pack(fill="both", expand=True)
@@ -978,28 +1344,31 @@ class App:
         # the row filtering inside `update_expert_visibility()`.
         self.show_expert_var = tk.BooleanVar(value=GUI_DEFAULTS["show_expert"])
 
-        geom = ttk.LabelFrame(left, text="Geometry", padding=8)
+        geom = ttk.LabelFrame(left, text="Section Geometry", padding=8)
         geom.pack(fill="x")
         geom.columnconfigure(1, weight=1)
         geom.columnconfigure(3, weight=1)
 
         row = 0
-        ttk.Label(geom, text="NACA profile").grid(row=row, column=0, sticky="w", padx=(0, 4), pady=(2, 0))
+        ttk.Label(geom, text="NACA profile", style="Panel.TLabel").grid(row=row, column=0, sticky="w", padx=(0, 4), pady=(1, 1))
         self.code_entry = tk.Entry(
             geom,
             textvariable=self.code_var,
             width=12,
             justify="center",
-            font=("Segoe UI", 18, "bold"),
+            font=("Segoe UI", 15, "bold"),
             bg=self.colors["entry"],
             fg=self.colors["text"],
             insertbackground=self.colors["text"],
             relief="flat",
             borderwidth=1,
+            highlightthickness=1,
+            highlightbackground=self.colors["border"],
+            highlightcolor=self.colors["accent"],
         )
         self.code_entry.grid(row=row, column=1, sticky="ew", pady=(2, 0))
         self.code_entry.bind("<KeyRelease>", self.schedule_update)
-        ttk.Label(geom, text="Mode").grid(row=row, column=2, sticky="w", padx=(8, 4), pady=2)
+        ttk.Label(geom, text="Mode", style="Panel.TLabel").grid(row=row, column=2, sticky="w", padx=(8, 4), pady=1)
         self.mode_map = {
             "Flat profile": "flat",
             "Curved profile (radius)": "curved",
@@ -1017,8 +1386,8 @@ class App:
         self.mode_combo = mode_combo
 
         row += 1
-        ttk.Label(geom, text="camber | camber position | thickness").grid(
-            row=row, column=0, columnspan=4, sticky="w", pady=(0, 4)
+        ttk.Label(geom, text="Camber | camber position | thickness", style="Muted.TLabel").grid(
+            row=row, column=0, columnspan=4, sticky="w", pady=(1, 4)
         )
 
         row += 1
@@ -1027,7 +1396,7 @@ class App:
             ("Pos", self.naca_pos_var, 0, 9),
         )
         for col, (label, var, min_v, max_v) in enumerate(slider_specs):
-            ttk.Label(geom, text=label).grid(row=row, column=col, sticky="w", pady=(0, 0))
+            ttk.Label(geom, text=label, style="Panel.TLabel").grid(row=row, column=col, sticky="w", pady=(0, 1))
             scale = tk.Scale(
                 geom,
                 from_=min_v,
@@ -1041,12 +1410,13 @@ class App:
                 highlightthickness=0,
                 troughcolor=self.colors["entry"],
                 activebackground=self.colors["accent"],
-                length=120,
+                length=108,
                 command=self.on_digit_slider_changed,
             )
-            scale.grid(row=row + 1, column=col, sticky="ew", padx=(0, 4), pady=(0, 4))
+            scale.grid(row=row + 1, column=col, sticky="ew", padx=(0, 4), pady=(0, 2))
+            self.tk_scale_widgets.append(scale)
 
-        ttk.Label(geom, text="Thickness").grid(row=row, column=2, columnspan=2, sticky="w", pady=(0, 0))
+        ttk.Label(geom, text="Thickness", style="Panel.TLabel").grid(row=row, column=2, columnspan=2, sticky="w", pady=(0, 1))
         self.thickness_scale = tk.Scale(
             geom,
             from_=1,
@@ -1060,17 +1430,18 @@ class App:
             highlightthickness=0,
             troughcolor=self.colors["entry"],
             activebackground=self.colors["accent"],
-            length=260,
+            length=220,
             command=self.on_digit_slider_changed,
         )
-        self.thickness_scale.grid(row=row + 1, column=2, columnspan=2, sticky="ew", padx=(0, 4), pady=(0, 4))
+        self.thickness_scale.grid(row=row + 1, column=2, columnspan=2, sticky="ew", padx=(0, 4), pady=(0, 2))
+        self.tk_scale_widgets.append(self.thickness_scale)
 
         row += 2
-        ttk.Label(geom, text="Chord [mm]").grid(row=row, column=0, sticky="w", padx=(0, 4), pady=2)
+        ttk.Label(geom, text="Chord [mm]", style="Panel.TLabel").grid(row=row, column=0, sticky="w", padx=(0, 4), pady=(3, 1))
         e = ttk.Entry(geom, textvariable=self.chord_var, width=10)
         e.grid(row=row, column=1, sticky="ew", pady=2)
         e.bind("<KeyRelease>", self.schedule_update)
-        ttk.Label(geom, text="Span [mm]").grid(row=row, column=2, sticky="w", padx=(8, 4), pady=2)
+        ttk.Label(geom, text="Span [mm]", style="Panel.TLabel").grid(row=row, column=2, sticky="w", padx=(8, 4), pady=(3, 1))
         e = ttk.Entry(geom, textvariable=self.span_var, width=10)
         e.grid(row=row, column=3, sticky="ew", pady=2)
         e.bind("<KeyRelease>", self.schedule_update)
@@ -1091,7 +1462,8 @@ class App:
             activebackground=self.colors["accent"],
             command=lambda _value: self.schedule_update(),
         )
-        self.chord_scale.grid(row=row, column=0, columnspan=2, sticky="ew", pady=(0, 4))
+        self.chord_scale.grid(row=row, column=0, columnspan=2, sticky="ew", pady=(0, 2))
+        self.tk_scale_widgets.append(self.chord_scale)
 
         self.span_scale = tk.Scale(
             geom,
@@ -1108,19 +1480,20 @@ class App:
             activebackground=self.colors["accent"],
             command=lambda _value: self.schedule_update(),
         )
-        self.span_scale.grid(row=row, column=2, columnspan=2, sticky="ew", pady=(0, 4))
+        self.span_scale.grid(row=row, column=2, columnspan=2, sticky="ew", pady=(0, 2))
+        self.tk_scale_widgets.append(self.span_scale)
 
-        trans = ttk.LabelFrame(left, text="Curvature / Transform", padding=8)
-        trans.pack(fill="x", pady=(6, 0))
+        trans = ttk.LabelFrame(left, text="Transform", padding=8)
+        trans.pack(fill="x", pady=(8, 0))
         trans.columnconfigure(1, weight=1)
         trans.columnconfigure(3, weight=1)
 
         row = 0
-        ttk.Label(trans, text="Radius [mm]").grid(row=row, column=0, sticky="w", padx=(0, 4), pady=2)
+        ttk.Label(trans, text="Radius [mm]", style="Panel.TLabel").grid(row=row, column=0, sticky="w", padx=(0, 4), pady=1)
         self.radius_entry = ttk.Entry(trans, textvariable=self.radius_var, width=10)
         self.radius_entry.grid(row=row, column=1, sticky="ew", pady=2)
         self.radius_entry.bind("<KeyRelease>", self.schedule_update)
-        ttk.Label(trans, text="Curvature").grid(row=row, column=2, sticky="w", padx=(8, 4), pady=2)
+        ttk.Label(trans, text="Curvature", style="Panel.TLabel").grid(row=row, column=2, sticky="w", padx=(8, 4), pady=1)
         self.curv_dir_combo = ttk.Combobox(
             trans,
             textvariable=self.curvature_dir_var,
@@ -1144,7 +1517,7 @@ class App:
             variable=self.mirror_y_var,
             command=self.update_preview,
         ).grid(row=row, column=1, sticky="w", pady=2)
-        ttk.Label(trans, text="Rotation [deg]").grid(row=row, column=2, sticky="w", padx=(8, 4), pady=2)
+        ttk.Label(trans, text="Rotation [deg]", style="Panel.TLabel").grid(row=row, column=2, sticky="w", padx=(8, 4), pady=1)
         e = ttk.Entry(trans, textvariable=self.angle_var, width=10)
         e.grid(row=row, column=3, sticky="ew", pady=2)
         e.bind("<KeyRelease>", self.schedule_update)
@@ -1165,16 +1538,17 @@ class App:
             activebackground=self.colors["accent"],
             command=lambda _value: self.schedule_update(),
         )
-        self.rotation_scale.grid(row=row, column=2, columnspan=2, sticky="ew", pady=(0, 4))
+        self.rotation_scale.grid(row=row, column=2, columnspan=2, sticky="ew", pady=(0, 2))
+        self.tk_scale_widgets.append(self.rotation_scale)
 
-        aero = ttk.LabelFrame(left, text="Aerodynamics", padding=8)
-        aero.pack(fill="x", pady=(6, 0))
+        aero = ttk.LabelFrame(left, text="Flight Estimate", padding=8)
+        aero.pack(fill="x", pady=(8, 0))
         aero.columnconfigure(1, weight=1)
         aero.columnconfigure(3, weight=1)
         self.aero_frame = aero
 
         arow = 0
-        ttk.Label(aero, text="Fluid").grid(row=arow, column=0, sticky="w", padx=(0, 4), pady=2)
+        ttk.Label(aero, text="Fluid", style="Panel.TLabel").grid(row=arow, column=0, sticky="w", padx=(0, 4), pady=1)
         self.fluid_combo = ttk.Combobox(
             aero,
             textvariable=self.fluid_var,
@@ -1184,7 +1558,7 @@ class App:
         )
         self.fluid_combo.grid(row=arow, column=1, sticky="ew", pady=2)
         self.fluid_combo.bind("<<ComboboxSelected>>", self.on_fluid_changed)
-        ttk.Label(aero, text="Velocity [km/h]").grid(row=arow, column=2, sticky="w", padx=(8, 4), pady=2)
+        ttk.Label(aero, text="Velocity [km/h]", style="Panel.TLabel").grid(row=arow, column=2, sticky="w", padx=(8, 4), pady=1)
         e = ttk.Entry(aero, textvariable=self.velocity_var, width=10)
         e.grid(row=arow, column=3, sticky="ew", pady=2)
         e.bind("<KeyRelease>", self.schedule_update)
@@ -1212,14 +1586,15 @@ class App:
             activebackground=self.colors["accent"],
             command=lambda _value: self.schedule_update(),
         )
-        self.velocity_scale.grid(row=arow, column=2, columnspan=2, sticky="ew", pady=(22, 4))
+        self.velocity_scale.grid(row=arow, column=2, columnspan=2, sticky="ew", pady=(18, 2))
+        self.tk_scale_widgets.append(self.velocity_scale)
 
 
         arow += 1
         self.density_entry = ttk.Entry(aero, textvariable=self.density_var, width=10)
         self.density_entry.grid(row=arow, column=1, sticky="ew", pady=2)
         self.density_entry.bind("<KeyRelease>", self.schedule_update)
-        ttk.Label(aero, text="Viscosity [PaÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â·s]").grid(row=arow, column=2, sticky="w", padx=(8, 4), pady=2)
+        ttk.Label(aero, text="Viscosity [Pa*s]").grid(row=arow, column=2, sticky="w", padx=(8, 4), pady=2)
         self.viscosity_entry = ttk.Entry(aero, textvariable=self.viscosity_var, width=10)
         self.viscosity_entry.grid(row=arow, column=3, sticky="ew", pady=2)
         self.viscosity_entry.bind("<KeyRelease>", self.schedule_update)
@@ -1239,7 +1614,7 @@ class App:
         e = ttk.Entry(aero, textvariable=self.override_cl_max_var, width=10)
         e.grid(row=arow, column=1, sticky="ew", pady=2)
         e.bind("<KeyRelease>", self.schedule_update)
-        ttk.Label(aero, text="Override ÃƒÆ’Ã…Â½Ãƒâ€šÃ‚Â±0ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â°").grid(row=arow, column=2, sticky="w", padx=(8, 4), pady=2)
+        ttk.Label(aero, text="Override alpha0 [deg]").grid(row=arow, column=2, sticky="w", padx=(8, 4), pady=2)
         e = ttk.Entry(aero, textvariable=self.override_alpha0_var, width=10)
         e.grid(row=arow, column=3, sticky="ew", pady=2)
         e.bind("<KeyRelease>", self.schedule_update)
@@ -1312,49 +1687,35 @@ class App:
             except Exception:
                 self.logo_image = None
 
-        actions = ttk.LabelFrame(left, text="Actions", padding=8)
-        actions.pack(fill="x", pady=(6, 0))
+        actions = ttk.LabelFrame(left, text="Export & Tools", padding=8)
+        actions.pack(fill="x", pady=(8, 0))
         actions.columnconfigure(0, weight=1)
         actions.columnconfigure(1, weight=1)
-        ttk.Button(actions, text="Save .stl", command=self.save_stl).grid(row=0, column=0, sticky="ew", padx=(0, 4), pady=2)
-        ttk.Button(actions, text="Save .pts", command=self.save_pts).grid(row=0, column=1, sticky="ew", pady=2)
-        ttk.Button(actions, text="Save .dxf", command=self.save_dxf).grid(row=1, column=0, sticky="ew", padx=(0, 4), pady=2)
-        ttk.Button(actions, text="Save .csv", command=self.save_csv).grid(row=1, column=1, sticky="ew", pady=2)
-        ttk.Button(actions, text="Update", command=self.update_preview).grid(row=2, column=0, sticky="ew", padx=(0, 4), pady=2)
-        ttk.Button(actions, text="Copy preview", command=self.copy_preview).grid(row=2, column=1, sticky="ew", pady=2)
+        ttk.Button(actions, text="STL", command=self.save_stl).grid(row=0, column=0, sticky="ew", padx=(0, 4), pady=2)
+        ttk.Button(actions, text="PTS", command=self.save_pts).grid(row=0, column=1, sticky="ew", padx=(4, 0), pady=2)
+        ttk.Button(actions, text="DXF", command=self.save_dxf).grid(row=1, column=0, sticky="ew", padx=(0, 4), pady=2)
+        ttk.Button(actions, text="CSV", command=self.save_csv).grid(row=1, column=1, sticky="ew", padx=(4, 0), pady=2)
+        ttk.Button(actions, text="Copy", command=self.copy_preview).grid(row=2, column=0, columnspan=2, sticky="ew", pady=(4, 2))
         ttk.Button(actions, text="Advanced options", command=self.open_advanced_options).grid(
             row=3,
             column=0,
             columnspan=2,
             sticky="ew",
-            pady=(4, 2),
+            pady=(4, 1),
         )
-
-        note = ttk.LabelFrame(left, text="Quick workflow", padding=8)
-        note.pack(fill="x", pady=(6, 0))
-        ttk.Label(
-            note,
-            text=(
-                "1) Enter NACA code and main parameters.\n"
-                "2) Check live plot and aero values.\n"
-                "3) Save .pts, .dxf, .stl, or .csv from Actions.\n"
-                "4) Use 'Copy preview' for quick export."
-            ),
-            justify="left",
-        ).pack(anchor="w")
 
         right_panes = ttk.Panedwindow(right, orient="vertical")
         right_panes.pack(fill="both", expand=True)
         self.right_panes = right_panes
 
-        graph_frame = ttk.LabelFrame(right_panes, text="Profile plot (live)", padding=8)
+        graph_frame = ttk.LabelFrame(right_panes, text="Live Profile", padding=8)
         bottom_frame = ttk.Frame(right_panes)
         right_panes.add(graph_frame, weight=4)
         right_panes.add(bottom_frame, weight=1)
 
-        graph_toolbar = ttk.Frame(graph_frame)
-        graph_toolbar.pack(fill="x", pady=(0, 6))
-        ttk.Label(graph_toolbar, text="View").pack(side="left")
+        graph_toolbar = ttk.Frame(graph_frame, style="Panel.TFrame")
+        graph_toolbar.pack(fill="x", pady=(0, 4))
+        ttk.Label(graph_toolbar, text="View", style="Panel.TLabel").pack(side="left")
         self.view_mode_var = tk.StringVar(value="2D")
         self.view_mode_combo = ttk.Combobox(
             graph_toolbar,
@@ -1365,8 +1726,13 @@ class App:
         )
         self.view_mode_combo.pack(side="left", padx=(6, 0))
         self.view_mode_combo.bind("<<ComboboxSelected>>", self.on_view_mode_changed)
+        ttk.Label(
+            graph_toolbar,
+            text="Mouse wheel zoom | drag to pan or rotate",
+            style="Muted.TLabel",
+        ).pack(side="right")
 
-        self.figure = Figure(figsize=(7, 4.8), dpi=100)
+        self.figure = Figure(figsize=(7, 3.55), dpi=100)
         self.ax = self.figure.add_subplot(111)
         self.figure.subplots_adjust(left=0.035, right=0.985, bottom=0.055, top=0.955)
         self.configure_plot_theme()
@@ -1378,30 +1744,32 @@ class App:
         self.canvas.mpl_connect("button_release_event", self.on_plot_button_release)
         self.canvas.mpl_connect("motion_notify_event", self.on_plot_mouse_move)
 
-        kpi_frame = ttk.LabelFrame(bottom_frame, text="Flight KPIs", padding=10)
+        kpi_frame = ttk.LabelFrame(bottom_frame, text="Estimated Forces", padding=8)
         kpi_frame.pack(fill="x", expand=False, pady=(8, 0))
         kpi_frame.columnconfigure(1, weight=1)
         kpi_frame.columnconfigure(3, weight=1)
-        ttk.Label(kpi_frame, textvariable=self.lift_label_var).grid(row=0, column=0, sticky="w")
-        ttk.Label(kpi_frame, textvariable=self.lift_out_var, style="KPIValue.TLabel").grid(row=0, column=1, sticky="w", padx=(4, 12))
-        ttk.Label(kpi_frame, textvariable=self.drag_label_var).grid(row=0, column=2, sticky="w")
-        ttk.Label(kpi_frame, textvariable=self.drag_out_var, style="KPIValueAlt.TLabel").grid(row=0, column=3, sticky="w", padx=(4, 0))
+        ttk.Label(kpi_frame, textvariable=self.lift_label_var, style="SummaryLabel.TLabel").grid(row=0, column=0, sticky="w", padx=(0, 4))
+        ttk.Label(kpi_frame, textvariable=self.lift_out_var, style="KPIValue.TLabel").grid(row=0, column=1, sticky="w", padx=(0, 18))
+        ttk.Label(kpi_frame, textvariable=self.drag_label_var, style="SummaryLabel.TLabel").grid(row=0, column=2, sticky="w", padx=(0, 4))
+        ttk.Label(kpi_frame, textvariable=self.drag_out_var, style="KPIValueAlt.TLabel").grid(row=0, column=3, sticky="w")
 
-        preview_frame = ttk.LabelFrame(bottom_frame, text="Points preview", padding=8)
+        preview_frame = ttk.LabelFrame(bottom_frame, text="Point Preview", padding=8)
         preview_frame.pack(fill="x", expand=False, pady=(8, 0))
 
-        summary = ttk.Frame(preview_frame)
+        summary = ttk.Frame(preview_frame, style="Panel.TFrame")
         summary.pack(fill="x", pady=(0, 4))
-        summary_labels = []
+        summary_labels = [
+            ("Mode", self.preview_mode_var),
+            ("Points", self.preview_points_var),
+            ("Format", self.preview_format_var),
+        ]
         for idx, (lbl, var) in enumerate(summary_labels):
             col = idx * 2
             summary.columnconfigure(col + 1, weight=1)
-            ttk.Label(summary, text=f"{lbl}:").grid(row=0, column=col, sticky="w", padx=(0, 2))
-            ttk.Label(summary, textvariable=var).grid(row=0, column=col + 1, sticky="w", padx=(0, 8))
-        if not summary_labels:
-            summary.pack_forget()
+            ttk.Label(summary, text=lbl, style="SummaryLabel.TLabel").grid(row=0, column=col, sticky="w", padx=(0, 4))
+            ttk.Label(summary, textvariable=var, style="SummaryValue.TLabel").grid(row=0, column=col + 1, sticky="w", padx=(0, 12))
 
-        text_row = ttk.Frame(preview_frame)
+        text_row = ttk.Frame(preview_frame, style="Panel.TFrame")
         text_row.pack(fill="x", expand=False)
 
         self.text = tk.Text(
@@ -1412,9 +1780,14 @@ class App:
             bg=self.colors["entry"],
             fg=self.colors["text"],
             insertbackground=self.colors["text"],
-            selectbackground=self.colors["accent"],
+            selectbackground=self.colors["selection"],
             relief="flat",
             borderwidth=1,
+            padx=6,
+            pady=6,
+            highlightthickness=1,
+            highlightbackground=self.colors["border"],
+            highlightcolor=self.colors["accent"],
         )
         self.text.pack(side="left", fill="x", expand=True)
 
@@ -1426,10 +1799,10 @@ class App:
 
         footer = ttk.Label(
             right,
-            text="Manta-Airlab | Fabio Giuliodori     Sponsored by www.duilio.cc ",
+            text="Manta-Airlab | Fabio Giuliodori | duilio.cc",
             style="Footer.TLabel",
         )
-        footer.pack(anchor="e", pady=(8, 0))
+        footer.pack(anchor="e", pady=(10, 0))
         self.setup_variable_sync()
         self.root.after_idle(self.initialize_pane_layout)
 
@@ -1496,7 +1869,7 @@ class App:
             self.main_panes.sashpos(0, total_width // 2)
 
             total_height = max(self.right_panes.winfo_height(), 2)
-            self.right_panes.sashpos(0, int(total_height * 0.72))
+            self.right_panes.sashpos(0, int(total_height * 0.66))
         except Exception:
             pass
 
@@ -1880,6 +2253,14 @@ class App:
                 pts_text, x, y, _ = write_pts_xy_text(x, y, decimals=vals["decimals"])
             else:
                 pts_text, x, y, _ = write_pts_text(x, y, decimals=vals["decimals"])
+            mode_label = "Flat" if vals["mode"] == "flat" else "Curved"
+            self.header_profile_var.set(f"NACA {vals['code']}")
+            self.header_status_var.set(
+                f"{mode_label} profile | chord {vals['chord'] * 1000:.0f} mm | span {vals['span'] * 1000:.0f} mm"
+            )
+            self.preview_mode_var.set(mode_label)
+            self.preview_points_var.set(str(len(x)))
+            self.preview_format_var.set(pts_fmt.upper())
             # With the UI convention, positive clockwise rotation corresponds to
             # positive aerodynamic angle of attack. Mirror X flips lift sign.
             # Mirror Y still disables aero because it reverses the profile
@@ -1897,6 +2278,10 @@ class App:
 
             self.redraw_plot(x, y, vals, aero)
         except Exception as e:
+            self.header_profile_var.set("Profile")
+            self.header_status_var.set("Check the current inputs")
+            self.preview_mode_var.set("-")
+            self.preview_points_var.set("-")
             self.reynolds_out_var.set("-")
             self.cl_out_var.set("-")
             self.cd_out_var.set("-")
@@ -1905,12 +2290,17 @@ class App:
             self.ld_out_var.set("-")
             self.show_plot_error(str(e))
 
-    def compute_force_reference(self, vals):
-        max_force = 1e-9
+    def compute_force_references(self, vals):
+        max_lift = 1e-9
+        max_drag = 1e-9
         for alpha in np.linspace(0.0, 90.0, 19):
             aero = self.compute_aero_results(vals, alpha_override=float(alpha))
-            max_force = max(max_force, abs(aero["lift"]), abs(aero["drag"]))
-        return max_force
+            max_lift = max(max_lift, abs(aero["lift"]))
+            max_drag = max(max_drag, abs(aero["drag"]))
+        return {
+            "lift": max_lift,
+            "drag": max_drag,
+        }
 
     def redraw_plot(self, x, y, vals, aero):
         plot_mode = "3d" if self.view_mode_var.get().strip().upper() == "3D" else "2d"
@@ -1937,7 +2327,7 @@ class App:
         if vals["mode"] == "curved":
             title += f" | R={vals['radius'] * 1000:.1f} mm"
         if vals["angle_deg"]:
-            title += f" | rot={vals['angle_deg']}ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â°"
+            title += f" | rot={vals['angle_deg']} deg"
 
         self.ax.set_title(title)
         self.ax.set_xlabel("X [mm]")
@@ -1965,69 +2355,85 @@ class App:
             x_center = 0.5 * (xmin + xmax)
             y_center = 0.5 * (ymin + ymax)
             span_ref = max(dx, dy, vals["chord"] * 1000.0)
+            pad_x = max(dx * 0.08, base)
+            pad_y = max(dy * 0.12, base)
+            drag_arrow = None
+            flow_arrow_len = None
             if aero is not None:
                 arrow_ref = max(span_ref * 0.28, 12.0)
-                force_ref = self.compute_force_reference(vals)
-                lift_len = arrow_ref * (abs(aero["lift"]) / force_ref)
-                drag_len = arrow_ref * (abs(aero["drag"]) / force_ref)
+                force_refs = self.compute_force_references(vals)
+                force_scale = max(force_refs["lift"], force_refs["drag"], 1e-9)
+                min_force_arrow = max(span_ref * 0.06, 6.0)
+                lift_len = max(arrow_ref * (abs(aero["lift"]) / force_scale), min_force_arrow)
+                drag_len = max(arrow_ref * (abs(aero["drag"]) / force_scale), min_force_arrow)
+                flow_arrow_len = lift_len + drag_len
                 lift_tip_y = y_center + (lift_len if aero["lift"] >= 0 else -lift_len)
-                drag_x0 = x_center - span_ref * 0.18
-                drag_tip_x = drag_x0 + drag_len
-                lift_caption = "Lift" if aero["lift"] >= 0 else "Downforce"
 
                 self.ax.annotate(
                     "",
                     xy=(x_center, lift_tip_y),
                     xytext=(x_center, y_center),
-                    arrowprops=dict(arrowstyle="-|>", lw=2.2, color="#34a853"),
+                    arrowprops=dict(
+                        arrowstyle="-|>",
+                        color=self.colors["lift"],
+                        lw=1.6,
+                        mutation_scale=11,
+                        shrinkA=0,
+                        shrinkB=0,
+                    ),
                 )
-                self.ax.annotate(
-                    "",
-                    xy=(drag_tip_x, y_center),
-                    xytext=(drag_x0, y_center),
-                    arrowprops=dict(arrowstyle="-|>", lw=2.2, color="#ea4335"),
-                )
-                self.ax.text(
-                    x_center,
-                    lift_tip_y,
-                    f" {lift_caption} {abs(aero['lift']) / 9.80665:.2f} kg",
-                    color="#34a853",
-                    va="bottom" if aero["lift"] >= 0 else "top",
-                    ha="left",
-                )
-                self.ax.text(
-                    drag_tip_x,
-                    y_center,
-                    f" Drag {aero['drag'] / 9.80665:.2f} kg",
-                    color="#ea4335",
-                    va="bottom",
-                    ha="left",
-                )
-
-                xmin = min(xmin, x_center, drag_x0, drag_tip_x)
-                xmax = max(xmax, x_center, drag_tip_x)
+                xmin = min(xmin, x_center)
+                xmax = max(xmax, x_center)
                 ymin = min(ymin, y_center, lift_tip_y)
                 ymax = max(ymax, y_center, lift_tip_y)
-            pad_x = max(dx * 0.08, base)
-            pad_y = max(dy * 0.12, base)
+
+                drag_arrow = {
+                    "length": drag_len,
+                    "origin_x": x_center,
+                    "origin_y": y_center,
+                }
 
             flow_y = ymax + pad_y * 0.45
             flow_x0 = xmin - pad_x * 0.25
-            flow_x1 = flow_x0 + compute_flow_arrow_length(span_ref, velocity_kmh)
+            if flow_arrow_len is None:
+                flow_arrow_len = compute_flow_arrow_length(span_ref, velocity_kmh)
+            flow_x1 = flow_x0 + flow_arrow_len
             self.ax.annotate(
                 "",
                 xy=(flow_x1, flow_y),
                 xytext=(flow_x0, flow_y),
-                arrowprops=dict(arrowstyle="->", lw=1.8, linestyle="--", color=self.colors["muted"]),
+                arrowprops=dict(
+                    arrowstyle="-|>",
+                    color=self.colors["muted"],
+                    lw=1.6,
+                    mutation_scale=11,
+                    alpha=0.85,
+                    shrinkA=0,
+                    shrinkB=0,
+                ),
             )
-            self.ax.text(
-                flow_x0,
-                flow_y + pad_y * 0.12,
-                "Flow",
-                color=self.colors["muted"],
-                ha="left",
-                va="bottom",
-            )
+
+            if drag_arrow is not None:
+                drag_x0 = drag_arrow["origin_x"]
+                drag_band_y = drag_arrow["origin_y"]
+                drag_tip_x = drag_x0 + drag_arrow["length"]
+                self.ax.annotate(
+                    "",
+                    xy=(drag_tip_x, drag_band_y),
+                    xytext=(drag_x0, drag_band_y),
+                    arrowprops=dict(
+                        arrowstyle="-|>",
+                        color=self.colors["drag"],
+                        lw=1.6,
+                        mutation_scale=11,
+                        shrinkA=0,
+                        shrinkB=0,
+                    ),
+                )
+                xmin = min(xmin, drag_x0, drag_tip_x)
+                xmax = max(xmax, drag_tip_x)
+                ymin = min(ymin, drag_band_y)
+                ymax = max(ymax, drag_band_y)
 
             xmax = max(xmax, flow_x1)
             ymax = max(ymax, flow_y)
@@ -2057,7 +2463,7 @@ class App:
 
         cap_poly = Poly3DCollection(
             [root_cap_mm, tip_cap_mm],
-            facecolors=["#8fb8ff", "#6fa0f2"],
+            facecolors=[self.colors["plot_fill"], self.colors["plot_fill_alt"]],
             edgecolors=self.colors["muted"],
             linewidths=0.7,
             alpha=0.48,
@@ -2475,3 +2881,4 @@ def run_cli(argv):
 
 if __name__ == "__main__":
     main()
+

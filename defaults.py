@@ -8,6 +8,7 @@ FLUID_PRESETS = {
 
 GUI_DEFAULTS = {
     "code": "2412",
+    "theme": "dark",
     "chord_mm": "100",
     "points_side": "100",
     "mode": "Flat profile",
