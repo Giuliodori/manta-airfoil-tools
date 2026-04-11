@@ -1,5 +1,14 @@
 #!/usr/bin/env python3
-"""Compare Airfoil Tools CLI analyze output against reference Cl/Cd data."""
+"""Manta AirLab | Fabio Giuliodori | duilio.cc
+
+# ______  _     _  ___  _       ___  ______      ____  ____
+# |     \ |     |   |   |        |   |     |    |     |
+# |_____/ |_____| __|__ |_____ __|__ |_____| .  |____ |____
+
+Benchmark runner for Manta AirLab.
+Compares CLI analysis output against reference aerodynamic datasets and
+generates aggregate CSV and chart summaries for validation.
+"""
 
 from __future__ import annotations
 

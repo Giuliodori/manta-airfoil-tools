@@ -3,7 +3,7 @@
 ## Application Entry Point
 
 The main application entry point is `airfoil_tools.py`.
-On Windows, use `airfoil-tools.bat`.
+On Windows, use `manta-airfoil-tools.bat`.
 
 ## Release Build
 
@@ -23,12 +23,18 @@ More details are available in `release_tool/README.md`.
 
 ## Licensing of Contributions
 
-By contributing to this repository, you agree that your contributions may be used under both:
+By contributing to this repository, you agree that your contributions will be released under:
 
 - GPL-3.0-only
-- a commercial license
 
-This ensures the project can continue to be dual-licensed.
+This keeps the contribution terms aligned with the repository license.
+
+## Project Credit
+
+Project credit should remain visible in repository-facing materials:
+
+- Manta AirLab — Airfoil Tools by Fabio Giuliodori
+- https://duilio.cc
 
 ## Pull Request Guidelines
 

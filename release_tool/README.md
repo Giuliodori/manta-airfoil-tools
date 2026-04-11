@@ -1,6 +1,6 @@
 # release_tool
 
-Python helper to create and clean release artifacts for **Airfoil Tools**.
+Python helper to create and clean release artifacts for **Manta AirLab**.
 
 ## Prerequisites
 
@@ -17,8 +17,8 @@ python release_tool/release_tool.py build
 
 What it does:
 1. Installs build dependencies from `release_tool/requirements-build.txt`
-2. Runs PyInstaller with `release_tool/airfoil-tools.spec`
-3. Produces executable in `dist/` (typically `dist/airfoil-tools.exe`)
+2. Runs PyInstaller with `release_tool/manta-airfoil-tools.spec`
+3. Produces executable in `dist/` (typically `dist/manta-airfoil-tools.exe`)
 
 ## Clean artifacts
 

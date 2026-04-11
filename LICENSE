@@ -1,12 +1,13 @@
-Airfoil Tools — Dual Licensing Notice
+Manta AirLab
 
 Copyright (C) Fabio Giuliodori.
 
-This software is dual-licensed:
-- GPL-3.0-only for open-source use
-- Commercial license for proprietary use
+This project is licensed under the GNU General Public License v3.0 only
+(GPL-3.0-only).
 
-SPDX-License-Identifier: GPL-3.0-only OR LicenseRef-Duilio-Commercial
+Project sponsorship: https://duilio.cc
+
+SPDX-License-Identifier: GPL-3.0-only
 
                     GNU GENERAL PUBLIC LICENSE
                        Version 3, 29 June 2007

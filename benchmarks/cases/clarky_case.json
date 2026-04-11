@@ -5,7 +5,7 @@
   "source": {
     "name": "UIUC Low-Speed Airfoil Tests Vol. 3",
     "url": "https://m-selig.ae.illinois.edu/pd/pub/lsat/vol3/CLARKYB.DRG",
-    "notes": "Reference CSV is copied from the DRG table. Airfoil Tools currently supports NACA 4-digit profiles only, so this case intentionally benchmarks how well a NACA 2412 proxy tracks Clark-Y data."
+    "notes": "Reference CSV is copied from the DRG table. Manta AirLab currently supports NACA 4-digit profiles only, so this case intentionally benchmarks how well a NACA 2412 proxy tracks Clark-Y data."
   },
   "cli": {
     "code": "2412",

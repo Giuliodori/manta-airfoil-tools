@@ -1,4 +1,13 @@
-"""Centralized default values for Airfoil Tools (GUI + CLI)."""
+"""Manta AirLab | Fabio Giuliodori | duilio.cc
+
+# ______  _     _  ___  _       ___  ______      ____  ____
+# |     \ |     |   |   |        |   |     |    |     |
+# |_____/ |_____| __|__ |_____ __|__ |_____| .  |____ |____
+
+Shared defaults module for Manta AirLab.
+Defines the default GUI values, CLI defaults, and fluid presets reused across
+the application.
+"""
 
 FLUID_PRESETS = {
     "air": {"rho": 1.225, "mu": 1.81e-5},

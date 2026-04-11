@@ -1,4 +1,4 @@
-# Airfoil Tools CLI
+# Manta AirLab CLI
 
 This page documents the optional command-line interface for advanced users.
 

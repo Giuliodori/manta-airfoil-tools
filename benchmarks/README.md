@@ -2,6 +2,8 @@
 
 This folder contains a lightweight workflow to compare `airfoil_tools.py analyze` outputs against external reference data.
 
+Third-party source notices for benchmark datasets are tracked in [`../THIRD_PARTY_NOTICES.md`](../THIRD_PARTY_NOTICES.md).
+
 ## Structure
 
 - `cases/`: JSON configuration for each benchmark case, including source metadata.

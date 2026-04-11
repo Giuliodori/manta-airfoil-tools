@@ -1,4 +1,13 @@
-"""Manta AirLab | Fabio Giuliodori — Explore https://duilio.cc."""
+"""Manta AirLab | Fabio Giuliodori | duilio.cc
+
+# ______  _     _  ___  _       ___  ______      ____  ____
+# |     \ |     |   |   |        |   |     |    |     |
+# |_____/ |_____| __|__ |_____ __|__ |_____| .  |____ |____
+
+Reference airfoil data module for Manta AirLab.
+Stores the aerodynamic lookup database and profile-specific coefficient
+presets used by the quick analysis model.
+"""
 
 import math
 

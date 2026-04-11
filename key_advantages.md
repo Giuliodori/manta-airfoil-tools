@@ -1,11 +1,11 @@
-# Competitive Positioning for Airfoil Tools
+# Competitive Positioning for Manta AirLab
 
 This note is meant to keep product positioning grounded in features that are already present in this repository.
 It should not rely on broad marketing claims or on competitor limitations that may change over time.
 
-## What Airfoil Tools really does today
+## What Manta AirLab really does today
 
-Airfoil Tools is a lightweight desktop app for working with 4-digit NACA sections.
+Manta AirLab is a lightweight desktop app for working with 4-digit NACA sections.
 
 Confirmed capabilities in the current project:
 
@@ -60,7 +60,7 @@ This is the clearest real value of the product: it helps users converge quickly 
 
 ### 2. Local desktop workflow
 
-Airfoil Tools runs as a desktop executable or from source.
+Manta AirLab runs as a desktop executable or from source.
 This gives a few practical benefits that are worth stating:
 
 - free to use in its open-source form
@@ -75,7 +75,7 @@ This is more concrete than claiming to be "better" than web tools in general.
 
 Many tools are good at visualization or exploration but add friction when the user simply needs geometry ready for CAD or downstream processing.
 
-Airfoil Tools is strong when the user wants:
+Manta AirLab is strong when the user wants:
 
 - `.dxf` for CAD curves
 - `.pts` or `.csv` for point workflows
@@ -121,7 +121,7 @@ This is a better claim than generic "high accuracy".
 ### 7. Lower friction than legacy engineering workflows
 
 This is true if phrased carefully.
-The value is not that Airfoil Tools replaces classic solvers, but that it reduces setup cost for common tasks:
+The value is not that Manta AirLab replaces classic solvers, but that it reduces setup cost for common tasks:
 
 - no terminal-first workflow for the main use case
 - no multi-tool handoff just to get a section exported
@@ -133,7 +133,7 @@ This is especially strong for early-stage geometry work and first-pass wing sizi
 
 One message should remain very clear in all product copy:
 
-- Airfoil Tools does not replace CFD.
+- Manta AirLab does not replace CFD.
 - It does not replace wind-tunnel work or experimental validation.
 - It does help designers reach a good first approximation faster, directly from the GUI.
 
@@ -156,7 +156,7 @@ Avoid saying:
 
 - "more accurate than X"
 - "best solver"
-- "better than Airfoil Tools / XFOIL / foil.tools" without direct evidence
+- "better than Manta AirLab / XFOIL / foil.tools" without direct evidence
 - "project management", "team collaboration", or "saved libraries" unless those features are actually implemented
 
 ## What competitor categories usually optimize for
@@ -167,7 +167,7 @@ A quick review of the main alternatives on the market today shows a recurring pa
 - classic solver-driven tools are stronger for deeper aerodynamic analysis, inverse design, and multi-method studies
 - larger legacy engineering tools often provide broader analysis depth, but ask for more setup, more domain knowledge, or more steps before geometry is ready for downstream use
 
-That matters because Airfoil Tools does not need to win on solver breadth.
+That matters because Manta AirLab does not need to win on solver breadth.
 It wins when the user wants the shortest path from a known 4-digit NACA idea to editable geometry, a quick engineering check, and exportable output.
 
 ## Additional advantages surfaced by competitor review
@@ -177,7 +177,7 @@ These are real, supportable advantages that are either missing or underplayed in
 ### 8. GUI first, but not GUI only
 
 Many lightweight airfoil tools are either browser-first or analysis-first.
-Airfoil Tools already supports both direct interactive work and command-line usage:
+Manta AirLab already supports both direct interactive work and command-line usage:
 
 - GUI for immediate shape tuning and visual feedback
 - CLI for scripted export and repeatable analysis runs
@@ -188,7 +188,7 @@ This is a concrete advantage because the same product can serve both quick manua
 
 Some alternatives are excellent for studying polars or comparing profiles, but still leave the user to rebuild or reformat geometry before manufacturing use.
 
-Airfoil Tools already reduces that gap by letting the user:
+Manta AirLab already reduces that gap by letting the user:
 
 - choose the section
 - set chord and span
@@ -208,7 +208,7 @@ That matters because many workflows lose time after export on tasks like:
 - rebuilding the extrusion length manually
 - checking whether the printed or modeled part matches the intended size
 
-Airfoil Tools reduces that friction by preparing geometry in the proportions the user is already designing around.
+Manta AirLab reduces that friction by preparing geometry in the proportions the user is already designing around.
 
 ### 11. Better fit for constrained or offline environments
 
@@ -224,7 +224,7 @@ This is especially relevant for educational, prototyping, and maker use cases wh
 
 A broad airfoil or wing-analysis suite can be powerful, but it also asks the user to navigate more concepts, more analysis modes, and more setup choices.
 
-Airfoil Tools benefits from being narrower:
+Manta AirLab benefits from being narrower:
 
 - one clear geometry family
 - one immediate editing model
@@ -234,20 +234,21 @@ Airfoil Tools benefits from being narrower:
 That narrower scope is not a weakness for the intended use case.
 It is a usability advantage for first-pass design work.
 
-### 13. Commercial-use path is clearer than GPL-only tooling
+### 13. GPLv3 keeps the licensing model simple and explicit
 
-The project is not limited to open-source redistribution terms.
-Because the repository already states dual licensing, this becomes a real positioning advantage for some users:
+The project uses GPL-3.0-only across the repository.
+That is not a commercial-use differentiator, but it is a clarity advantage:
 
-- GPL route for open-source use
-- commercial license path for proprietary or closed-source contexts
+- one public license
+- one set of redistribution terms
+- one clear expectation for contributors and downstream users
 
-This should not be overplayed, but it is a meaningful differentiator for consultants, internal R&D teams, and product-development workflows.
+That simplicity reduces ambiguity when evaluating whether the tool fits an engineering workflow.
 
 ### 14. Evidence-backed quick estimates instead of black-box claims
 
 Some tools present aerodynamic outputs with little context on what is behind them.
-Airfoil Tools can make a better credibility claim because the repository already includes:
+Manta AirLab can make a better credibility claim because the repository already includes:
 
 - benchmark cases
 - reference datasets
@@ -273,7 +274,7 @@ Even small controls like these reduce friction in CAD import, scripting pipeline
 ### 16. Useful across air and water workflows
 
 Many airfoil tools are presented mainly in an aircraft context.
-Airfoil Tools already supports a broader first-pass workflow by exposing fluid presets for:
+Manta AirLab already supports a broader first-pass workflow by exposing fluid presets for:
 
 - air
 - water
@@ -300,7 +301,7 @@ That is useful because it lets the user tune the first-pass estimate toward a mo
 ### 18. Handles orientation and mirrored use cases without redrawing geometry
 
 In practical workflows, users often need to flip a section, invert a load convention, or prepare mirrored geometry for downstream use.
-Airfoil Tools already supports this directly through axis mirroring and rotation controls.
+Manta AirLab already supports this directly through axis mirroring and rotation controls.
 
 That is a small feature, but it is a real workflow advantage because it avoids:
 
@@ -313,7 +314,7 @@ This is especially useful for control surfaces, opposite-side parts, inverted us
 ### 19. Point data is inspectable before export
 
 Some tools generate output files but make the geometry data itself relatively opaque until it is opened elsewhere.
-Airfoil Tools already includes an in-app point preview and copy action.
+Manta AirLab already includes an in-app point preview and copy action.
 
 That gives a few practical benefits:
 
@@ -375,7 +376,7 @@ The safest message is:
 - web tools are convenient for lookup and exploration
 - classic solvers are strong for deeper analysis
 - broader suites are useful when the project needs many methods, but they usually add setup and learning overhead
-- Airfoil Tools is strongest when you need a fast, local, export-oriented workflow for 4-digit NACA sections
+- Manta AirLab is strongest when you need a fast, local, export-oriented workflow for 4-digit NACA sections
 
 That positioning is honest and already supported by the repository.
 

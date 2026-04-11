@@ -1,7 +1,12 @@
 #!/usr/bin/env python3
-"""Manta AirLab | Fabio Giuliodori — Explore https://duilio.cc.
+"""Manta AirLab | Fabio Giuliodori | duilio.cc
 
-Release helper for Airfoil Tools.
+# ______  _     _  ___  _       ___  ______      ____  ____
+# |     \ |     |   |   |        |   |     |    |     |
+# |_____/ |_____| __|__ |_____ __|__ |_____| .  |____ |____
+
+Release helper for Manta AirLab.
+Builds and cleans packaged Windows release artifacts for the project.
 
 Usage:
   python release_tool/release_tool.py
@@ -29,7 +34,7 @@ def run(cmd: list[str], cwd: Path) -> None:
 
 def do_build(root: Path) -> None:
     req_file = root / "release_tool" / "requirements-build.txt"
-    spec_file = root / "release_tool" / "airfoil-tools.spec"
+    spec_file = root / "release_tool" / "manta-airfoil-tools.spec"
 
     if not req_file.exists():
         raise FileNotFoundError(f"Missing requirements file: {req_file}")
@@ -39,7 +44,7 @@ def do_build(root: Path) -> None:
     run([sys.executable, "-m", "pip", "install", "-r", str(req_file)], cwd=root)
     run([sys.executable, "-m", "PyInstaller", "--noconfirm", str(spec_file)], cwd=root)
 
-    out_file = root / "dist" / "airfoil-tools.exe"
+    out_file = root / "dist" / "manta-airfoil-tools.exe"
     if out_file.exists():
         print(f"Build completed: {out_file}")
     else:
@@ -50,7 +55,7 @@ def do_clean(root: Path) -> None:
     targets = [
         root / "build",
         root / "dist",
-        root / "airfoil-tools.spec",
+        root / "manta-airfoil-tools.spec",
         root / "__pycache__",
         root / "release_tool" / "__pycache__",
     ]
@@ -67,7 +72,10 @@ def do_clean(root: Path) -> None:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Build and clean Airfoil Tools release artifacts")
+    parser = argparse.ArgumentParser(
+        description="Build and clean Manta AirLab release artifacts",
+        epilog="Manta AirLab — Airfoil Tools by Fabio Giuliodori | duilio.cc",
+    )
     parser.add_argument(
         "command",
         nargs="?",

@@ -1,9 +1,19 @@
-"""Manta AirLab | Fabio Giuliodori — Explore https://duilio.cc."""
+"""Manta AirLab | Fabio Giuliodori | duilio.cc
 
-# SPDX-License-Identifier: GPL-3.0-only OR LicenseRef-Duilio-Commercial
+# ______  _     _  ___  _       ___  ______      ____  ____
+# |     \ |     |   |   |        |   |     |    |     |
+# |_____/ |_____| __|__ |_____ __|__ |_____| .  |____ |____
+
+Main application module for Manta AirLab.
+Provides the desktop GUI, CLI entry points, geometry generation workflow,
+preview rendering, export operations, and quick aerodynamic estimates for
+4-digit NACA airfoils.
+"""
+
+# SPDX-License-Identifier: GPL-3.0-only
 #
-# This file is part of Airfoil Tools.
-# See LICENSE and COMMERCIAL-LICENSE.md for details.
+# This file is part of Manta AirLab.
+# See LICENSE for details.
 
 import importlib
 import argparse
@@ -784,7 +794,7 @@ def generate_airfoil_xy(values):
 class App:
     def __init__(self, root):
         self.root = root
-        self.root.title("Airfoil Tools")
+        self.root.title("Manta AirLab")
         self.style = ttk.Style()
         self.theme_var = tk.StringVar(
             value=THEME_KEY_TO_LABEL.get(GUI_DEFAULTS["theme"], THEME_OPTION_LABELS[0])
@@ -1381,8 +1391,8 @@ class App:
         header_left.grid(row=0, column=0, sticky="nsew")
         title_row = ttk.Frame(header_left, style="Hero.TFrame")
         title_row.pack(anchor="w")
-        ttk.Label(title_row, text="Airfoil Tools", style="HeroTitle.TLabel").pack(side="left")
-        ttk.Label(title_row, text="Manta AirLab | Fabio Giuliodori — Explore https://duilio.cc", style="HeroSignature.TLabel").pack(side="left", padx=(8, 0), pady=(2, 0))
+        ttk.Label(title_row, text="Manta AirLab", style="HeroTitle.TLabel").pack(side="left")
+        ttk.Label(title_row, text="by Fabio Giuliodori | duilio.cc", style="HeroSignature.TLabel").pack(side="left", padx=(8, 0), pady=(2, 0))
 
         header_right = ttk.Frame(header, style="Hero.TFrame", padding=(10, 0, 0, 0))
         header_right.grid(row=0, column=1, sticky="e")
@@ -1857,7 +1867,7 @@ class App:
 
         footer = ttk.Label(
             right,
-            text="Manta AirLab | Fabio Giuliodori — Explore https://duilio.cc",
+            text="Manta AirLab — Airfoil Tools by Fabio Giuliodori | duilio.cc",
             style="Footer.TLabel",
         )
         footer.pack(anchor="e", pady=(10, 0))
@@ -2793,7 +2803,8 @@ def _positive_int(value: str, name: str, minimum: int = 1):
 def build_cli_parser():
     parser = argparse.ArgumentParser(
         prog="airfoil_tools.py",
-        description="Airfoil Tools CLI (GUI remains the default with no arguments).",
+        description="Manta AirLab CLI for Airfoil Tools (GUI remains the default with no arguments).",
+        epilog="Manta AirLab — Airfoil Tools by Fabio Giuliodori | duilio.cc",
     )
     subparsers = parser.add_subparsers(dest="command")
 
