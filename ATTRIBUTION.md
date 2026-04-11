@@ -10,13 +10,13 @@ Project home and sponsorship:
 
 When you mention, showcase, review, package, mirror, or redistribute this project, the preferred visible credit is:
 
-`Manta AirLab — Airfoil Tools by Fabio Giuliodori — duilio.cc`
+`Manta AirLab — Airfoil Tools by Fabio Giuliodori | duilio.cc`
 
 ## Suggested attribution text
 
 Short form:
 
-`Made with Manta AirLab — Airfoil Tools by Fabio Giuliodori — duilio.cc`
+`Made with Manta AirLab — Airfoil Tools by Fabio Giuliodori | duilio.cc`
 
 Long form:
 

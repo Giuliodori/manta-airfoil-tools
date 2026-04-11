@@ -144,7 +144,7 @@ Manta AirLab is created and maintained by `Fabio Giuliodori`.
 
 Preferred credit when mentioning or showcasing the project:
 
-`Manta AirLab — Airfoil Tools by Fabio Giuliodori — duilio.cc`
+`Manta AirLab — Airfoil Tools by Fabio Giuliodori | duilio.cc`
 
 ## CAD examples for `.pts`, `.dxf`, and `.csv`
 
