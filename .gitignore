@@ -18,5 +18,7 @@ benchmarks/results/*
 benchmarks/data_sources/
 
 # Local database workspace
+database/
+xfoil/
 database/_local/
 airfoils_database.db

@@ -13,8 +13,26 @@ python manta_airfoil_tools.py --help
 
 ## Supported commands
 
+- `setup`: install runtime Python dependencies and external assets such as `airfoil.db` and `xfoil.exe`
 - `export`: export a NACA 4-digit profile to `.pts`, `.dxf`, `.stl`, or `.csv`
 - `analyze`: print a quick aerodynamic estimate (`Re`, `Cl`, `Cd`, `lift`, `drag`, `L/D`)
+
+---
+
+## `setup`
+
+Install local runtime requirements and external tools:
+
+```bash
+python manta_airfoil_tools.py setup --yes
+```
+
+Useful options:
+
+- `--yes` run without confirmation prompts
+- `--skip-python` skip Python package checks
+- `--skip-airfoil-db` skip download of `database/airfoil.db`
+- `--skip-xfoil` skip download of `xfoil/xfoil.exe`
 
 ---
 

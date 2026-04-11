@@ -105,6 +105,13 @@ python -m pip install -r requirements.txt
 
 Auto-install: if `numpy` or `matplotlib` are missing, the app will prompt you at launch.
 If `ezdxf` is missing, the app will prompt you when saving `.dxf`.
+Local runtime assets such as `database/airfoil.db` and `xfoil/xfoil.exe` are stored in local workspace folders and are not versioned.
+
+Bootstrap everything automatically:
+
+```bash
+python manta_airfoil_tools.py setup --yes
+```
 
 Run:
 

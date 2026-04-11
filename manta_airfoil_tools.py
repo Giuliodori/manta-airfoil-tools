@@ -19,7 +19,6 @@ import importlib
 import argparse
 import math
 import os
-import subprocess
 import sys
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
@@ -40,6 +39,7 @@ except ImportError:
 
 from airfoil_library import get_airfoil_parameters
 from defaults import CLI_DEFAULTS, FLUID_PRESETS, GUI_DEFAULTS
+from setup import ensure_local_directories, ensure_python_packages, ensure_runtime_assets
 
 THEME_PRESETS = {
     "dark": {
@@ -112,32 +112,6 @@ THEME_KEY_TO_LABEL = {
 THEME_OPTION_LABELS = tuple(THEME_LABEL_TO_KEY.keys())
 
 
-def _prompt_install(packages, context=""):
-    pkg_list = ", ".join(packages)
-    header = "Install dependencies"
-    extra = f"\n\n{context}" if context else ""
-    msg = f"Missing dependencies: {pkg_list}.\nInstall now?{extra}"
-    try:
-        root = tk.Tk()
-        root.withdraw()
-        try:
-            return messagebox.askyesno(header, msg)
-        finally:
-            root.destroy()
-    except Exception:
-        resp = input(f"{msg} [y/N]: ")
-        return resp.strip().lower().startswith("y")
-
-
-def _run_pip_install(packages):
-    cmd = [sys.executable, "-m", "pip", "install", *packages]
-    try:
-        completed = subprocess.run(cmd, check=False)
-    except Exception:
-        return False
-    return completed.returncode == 0
-
-
 def _load_plotting_deps():
     global np, FigureCanvasTkAgg, Figure, Poly3DCollection
     if np is None:
@@ -162,15 +136,7 @@ def ensure_required_deps():
     if not required:
         return True
 
-    if not _prompt_install(required, context="The app cannot start without these packages."):
-        return False
-
-    if not _run_pip_install(required):
-        messagebox.showerror(
-            "Install failed",
-            "Unable to install required packages. Please install them manually "
-            "and restart the app.",
-        )
+    if not ensure_python_packages(required, context="The app cannot start without these packages."):
         return False
 
     try:
@@ -627,22 +593,16 @@ def _load_ezdxf(prompt_install: bool):
     except ImportError as exc:
         if not prompt_install:
             raise RuntimeError("DXF export requires 'ezdxf'. Install with: pip install ezdxf") from exc
-        if _prompt_install(["ezdxf"], context="Needed to export DXF files."):
-            if _run_pip_install(["ezdxf"]):
-                try:
-                    import ezdxf  # type: ignore
-                except Exception as err:
-                    raise RuntimeError(
-                        "Library 'ezdxf' was installed but could not be imported."
-                    ) from err
-            else:
-                raise RuntimeError(
-                    "Unable to install 'ezdxf'. Please install it manually and retry."
-                ) from exc
-        else:
+        if not ensure_python_packages(["ezdxf"], context="Needed to export DXF files."):
             raise RuntimeError(
                 "Library 'ezdxf' is not installed. Install with: pip install ezdxf"
             ) from exc
+        try:
+            import ezdxf  # type: ignore
+        except Exception as err:
+            raise RuntimeError(
+                "Library 'ezdxf' was installed but could not be imported."
+            ) from err
     return ezdxf
 
 
@@ -2768,6 +2728,7 @@ class App:
 
 
 def main():
+    ensure_local_directories()
     exit_code = run_cli(sys.argv[1:])
     if exit_code is None:
         if not ensure_required_deps():
@@ -2904,6 +2865,12 @@ def build_cli_parser():
     analyze_cmd.add_argument("--density", type=float, help="Density [kg/m^3] for --fluid custom.")
     analyze_cmd.add_argument("--viscosity", type=float, help="Dynamic viscosity [Pa*s] for --fluid custom.")
 
+    setup_cmd = subparsers.add_parser("setup", help="Install runtime Python packages and external assets.")
+    setup_cmd.add_argument("--yes", action="store_true", help="Install without interactive confirmation prompts.")
+    setup_cmd.add_argument("--skip-python", action="store_true", help="Skip Python package installation checks.")
+    setup_cmd.add_argument("--skip-airfoil-db", action="store_true", help="Skip airfoil.db download.")
+    setup_cmd.add_argument("--skip-xfoil", action="store_true", help="Skip XFOIL download.")
+
     return parser
 
 
@@ -2917,6 +2884,40 @@ def run_cli(argv):
         return None
 
     try:
+        if args.command == "setup":
+            ok = True
+            if not args.skip_python:
+                packages = []
+                if np is None:
+                    packages.append("numpy")
+                if FigureCanvasTkAgg is None or Figure is None or Poly3DCollection is None:
+                    packages.append("matplotlib")
+                if not ensure_python_packages(
+                    packages,
+                    context="Needed for GUI plotting and numeric processing.",
+                    assume_yes=args.yes,
+                ):
+                    ok = False
+
+            results = ensure_runtime_assets(
+                include_airfoil_db=not args.skip_airfoil_db,
+                include_xfoil=not args.skip_xfoil,
+                assume_yes=args.yes,
+            )
+            if not args.skip_airfoil_db and not results.get("airfoil_db"):
+                ok = False
+            if not args.skip_xfoil and not results.get("xfoil"):
+                ok = False
+
+            if ok:
+                print("Setup completed.")
+                if results.get("airfoil_db"):
+                    print(f"airfoil.db: {results['airfoil_db']}")
+                if results.get("xfoil"):
+                    print(f"xfoil.exe: {results['xfoil']}")
+                return 0
+            return 1
+
         parse_naca4_code(args.code)
         if args.command == "export":
             ensure_numpy()
