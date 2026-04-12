@@ -1,4 +1,7 @@
-# Manta AirLab CLI
+# Manta Airlab CLI
+
+Repository: `manta-airfoil-tools`
+Brand: `Manta Airlab`
 
 This page documents the optional command-line interface for advanced users.
 
@@ -102,3 +105,4 @@ Main options:
 - `--viscosity` required with `--fluid custom`
 
 Output is concise and includes Reynolds number, aerodynamic coefficients, and force estimate.
+

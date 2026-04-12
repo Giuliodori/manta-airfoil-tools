@@ -2,7 +2,7 @@
 
 This folder contains a lightweight workflow to compare `manta_airfoil_tools.py analyze` outputs against external reference data.
 
-Third-party source notices for benchmark datasets are tracked in [`../THIRD_PARTY_NOTICES.md`](../THIRD_PARTY_NOTICES.md).
+Third-party source notices for benchmark datasets are tracked in [`../docs/THIRD_PARTY_NOTICES.md`](../docs/THIRD_PARTY_NOTICES.md).
 
 ## Structure
 

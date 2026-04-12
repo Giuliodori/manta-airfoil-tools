@@ -1,4 +1,4 @@
-# TODO operativo - Manta AirLab (DB-first)
+# TODO operativo - Manta Airlab (DB-first)
 
 Obiettivo: consolidare il passaggio da workflow solo NACA a workflow `NACA + Library` con dati reali da `database/airfoil.db`, mantenendo preview/export veloci.
 

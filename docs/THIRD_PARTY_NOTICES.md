@@ -4,12 +4,13 @@ This repository references external software, datasets, and source websites used
 
 The goal of this file is to keep third-party notices explicit and separate from the main project license.
 
-Manta AirLab itself is licensed under `GPL-3.0-only`. Third-party materials keep their own authorship, copyright, and license terms.
+Repository: `manta-airfoil-tools`
+Brand: `Manta Airlab`
+Founder and maintainer: `Fabio Giuliodori`
+Open-source sponsor: [`Duilio.cc`](https://duilio.cc)
 
-Project credit:
-
-- Manta AirLab — Airfoil Tools by Fabio Giuliodori
-- Project home and sponsorship: https://duilio.cc
+Manta Airlab itself is licensed under `GPL-3.0-only`.
+Third-party materials keep their own authorship, copyright, and license terms.
 
 ## XFOIL
 
@@ -58,4 +59,5 @@ The benchmark suite also cites NASA and NLR/OSU reference material. Those citati
 
 ## Maintainer note
 
-This file is intended to keep attribution and redistribution notices visible. It does not replace upstream license texts where upstream redistribution terms require them to be included verbatim.
+This file is intended to keep attribution and redistribution notices visible.
+It does not replace upstream license texts where upstream redistribution terms require them to be included verbatim.

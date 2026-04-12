@@ -1,5 +1,10 @@
 # Contributing
 
+Repository: `manta-airfoil-tools`
+Brand: `Manta Airlab`
+Founder and maintainer: `Fabio Giuliodori`
+Open-source sponsor: [`Duilio.cc`](https://duilio.cc)
+
 ## Application Entry Point
 
 The main application entry point is `manta_airfoil_tools.py`.
@@ -19,7 +24,7 @@ To clean generated artifacts:
 python release_tool/release_tool.py clean
 ```
 
-More details are available in `release_tool/README.md`.
+More details are available in `../release_tool/README.md`.
 
 ## Licensing of Contributions
 
@@ -33,7 +38,7 @@ This keeps the contribution terms aligned with the repository license.
 
 Project credit should remain visible in repository-facing materials:
 
-- Manta AirLab — Airfoil Tools by Fabio Giuliodori
+- Manta Airlab - Airfoil Tools by Fabio Giuliodori
 - https://duilio.cc
 
 ## Pull Request Guidelines
