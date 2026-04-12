@@ -58,8 +58,8 @@ It does not replace CFD or experimental testing. It helps you arrive at a good f
 - Use it for first-pass wing or foil sizing before CFD and physical tests
 
 Current local Library footprint (`database/airfoil.db`, snapshot 12 April 2026):
-- `1406` profiles with geometry
-- `40,576` polar rows (`21,646` converged)
+- `~1.4k` profiles with geometry
+- `~40.6k` polar rows (`~21.6k` converged)
 - ratings and usage metadata for fast filtering/ranking workflows
 
 

@@ -6,7 +6,7 @@ It should not rely on broad marketing claims or on competitor limitations that m
 ## What Manta AirLab really does today
 
 Manta AirLab is a lightweight desktop app for working with airfoil sections in dual source mode: procedural `NACA` generation and reusable `Library` profiles from local DB.
-With the current DB snapshot, users start with `1406` profiles and `40,576` polar rows already available locally.
+With the current DB snapshot, users start with about `1.4k` profiles and `40k+` polar rows already available locally.
 
 Confirmed capabilities in the current project:
 
@@ -45,13 +45,13 @@ Important limits to state clearly:
 
 Current `database/airfoil.db` footprint used by the app:
 
-- `airfoils`: `1406` profiles (all currently valid for geometry ingestion).
-- Geometry coverage: `1406/1406` with JSON point geometry.
-- `airfoil_polars_xfoil`: `40,576` polar rows, `21,646` converged (`~53.3%`).
+- `airfoils`: `~1.4k` profiles (all currently valid for geometry ingestion).
+- Geometry coverage: effectively `100%` of listed profiles with JSON point geometry.
+- `airfoil_polars_xfoil`: `~40.6k` polar rows, `~21.6k` converged (`~53%`).
 - Polar coverage axes currently present in DB: `4` Reynolds levels (`150k` to `1.25M`) and `8` alpha levels (`-4°` to `10°`).
-- Ratings: `1,406` global rows + `25,308` detail rows.
-- Usage metadata: `4,285` application rows + `8,452` aircraft usage rows.
-- Stored XFOIL runs: `5,624`.
+- Ratings: `~1.4k` global rows + `~25.3k` detail rows.
+- Usage metadata: `~4.3k` application rows + `~8.5k` aircraft usage rows.
+- Stored XFOIL runs: `~5.6k`.
 
 ## Real advantages to emphasize
 
