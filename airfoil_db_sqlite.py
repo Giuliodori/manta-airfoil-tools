@@ -7,11 +7,15 @@ from __future__ import annotations
 import json
 import math
 import sqlite3
+import sys
 from pathlib import Path
 from typing import Any
 
 
-REPO_ROOT = Path(__file__).resolve().parent
+if getattr(sys, "frozen", False):
+    REPO_ROOT = Path(sys.executable).resolve().parent
+else:
+    REPO_ROOT = Path(__file__).resolve().parent
 DEFAULT_DB_PATH = REPO_ROOT / "database" / "airfoil.db"
 
 

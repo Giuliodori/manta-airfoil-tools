@@ -28,7 +28,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name="manta-airfoil-tools",
+    name="Manta_Airfoil_Tools_portable",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

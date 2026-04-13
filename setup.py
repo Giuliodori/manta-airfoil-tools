@@ -18,7 +18,10 @@ import urllib.request
 import zipfile
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parent
+if getattr(sys, "frozen", False):
+    REPO_ROOT = Path(sys.executable).resolve().parent
+else:
+    REPO_ROOT = Path(__file__).resolve().parent
 DATABASE_DIR = REPO_ROOT / "database"
 XFOIL_DIR = REPO_ROOT / "xfoil"
 
@@ -27,6 +30,7 @@ AIRFOIL_DB_URL = "https://github.com/Giuliodori/airfoil-db-maker/releases/latest
 
 XFOIL_EXE_PATH = XFOIL_DIR / "xfoil.exe"
 XFOIL_ZIP_URL = "https://web.mit.edu/drela/Public/web/xfoil/XFOIL6.99.zip"
+XFOIL_LOCAL_ZIP_PATH = XFOIL_DIR / "XFOIL6.99.zip"
 
 
 def ensure_local_directories():
@@ -171,6 +175,19 @@ def ensure_xfoil(*, assume_yes=False):
     if XFOIL_EXE_PATH.exists():
         _prune_xfoil_directory(XFOIL_EXE_PATH)
         return XFOIL_EXE_PATH
+
+    if XFOIL_LOCAL_ZIP_PATH.exists():
+        try:
+            with zipfile.ZipFile(XFOIL_LOCAL_ZIP_PATH, "r") as archive:
+                archive.extractall(XFOIL_DIR)
+        except Exception:
+            pass
+        for candidate in XFOIL_DIR.rglob("xfoil.exe"):
+            target = XFOIL_EXE_PATH
+            if candidate.resolve() != target.resolve():
+                target.write_bytes(candidate.read_bytes())
+            _prune_xfoil_directory(target)
+            return target
 
     message = (
         "XFOIL is missing.\n"

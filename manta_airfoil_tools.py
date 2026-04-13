@@ -1,4 +1,4 @@
-"""Manta AirLab | Fabio Giuliodori | duilio.cc
+﻿"""Manta AirLab | Fabio Giuliodori | duilio.cc
 
 # ______  _     _  ___  _       ___  ______      ____  ____
 # |     \ |     |   |   |        |   |     |    |     |
@@ -17,12 +17,14 @@ preview rendering, export operations, and quick aerodynamic estimates for
 
 import importlib
 import argparse
+import io
 import math
 import os
 import subprocess
 import sys
 import tempfile
 import tkinter as tk
+import webbrowser
 from tkinter import filedialog, messagebox, ttk
 from pathlib import Path
 import time
@@ -57,6 +59,7 @@ from geometry import (
     strip_duplicate_closing_point,
     transform_points,
 )
+from units import SPEED_SLIDER_LIMITS, UNIT_PRESETS, force_from_newton, ms_to_speed, speed_to_ms
 from setup import ensure_local_directories, ensure_python_packages, ensure_runtime_assets
 
 THEME_PRESETS = {
@@ -198,7 +201,7 @@ def ensure_numpy():
 class App:
     def __init__(self, root):
         self.root = root
-        self.root.title("Manta AirLab")
+        self.root.title("Manta Airfoil Tools")
         self.style = ttk.Style()
         self.theme_var = tk.StringVar(
             value=THEME_KEY_TO_LABEL.get(GUI_DEFAULTS["theme"], THEME_OPTION_LABELS[0])
@@ -554,6 +557,12 @@ class App:
             foreground=self.colors["muted"],
             font=("Segoe UI", 9),
         )
+        self.style.configure(
+            "FooterLink.TLabel",
+            background=self.colors["bg"],
+            foreground=self.colors["accent"],
+            font=("Segoe UI", 9, "underline"),
+        )
         self.refresh_theme_widgets()
 
     def refresh_theme_widgets(self):
@@ -624,6 +633,283 @@ class App:
     def on_theme_changed(self, event=None):
         self.apply_theme(self.theme_var.get())
 
+    def _load_brand_logo_image(self, max_logo_width=240):
+        try:
+            images_dir = Path(__file__).resolve().parent / "images"
+            logo_image = None
+            for logo_svg_path in (
+                images_dir / "logo_airfoil_tools.svg",
+                images_dir / "logo_manta_air_lab.svg",
+            ):
+                if not logo_svg_path.exists():
+                    continue
+                try:
+                    import cairosvg
+                    from PIL import Image, ImageTk
+
+                    png_bytes = cairosvg.svg2png(url=str(logo_svg_path))
+                    pil_img = Image.open(io.BytesIO(png_bytes))
+                    pil_img.load()
+                    if pil_img.width > max_logo_width:
+                        scale = pil_img.width / max_logo_width
+                        pil_img = pil_img.resize(
+                            (max_logo_width, max(1, int(round(pil_img.height / scale)))),
+                            Image.Resampling.LANCZOS,
+                        )
+                    logo_image = ImageTk.PhotoImage(pil_img)
+                    break
+                except Exception:
+                    logo_image = None
+            if logo_image is None:
+                for fallback_path in (
+                    images_dir / "logo_airfoil_tools.png",
+                    images_dir / "logo_manta_air_lab.png",
+                    images_dir / "gui_old.png",
+                ):
+                    if not fallback_path.exists():
+                        continue
+                    try:
+                        from PIL import Image, ImageChops, ImageTk
+
+                        pil_img = Image.open(fallback_path)
+                        pil_img.load()
+                        pil_img = pil_img.convert("RGBA")
+
+                        alpha = pil_img.split()[-1]
+                        bbox = alpha.getbbox()
+                        if bbox is None:
+                            bg = Image.new("RGBA", pil_img.size, pil_img.getpixel((0, 0)))
+                            diff = ImageChops.difference(pil_img, bg)
+                            bbox = diff.getbbox()
+                        if bbox is not None:
+                            pil_img = pil_img.crop(bbox)
+
+                        if pil_img.width > max_logo_width:
+                            scale = pil_img.width / max_logo_width
+                            pil_img = pil_img.resize(
+                                (max_logo_width, max(1, int(round(pil_img.height / scale)))),
+                                Image.Resampling.LANCZOS,
+                            )
+                        logo_image = ImageTk.PhotoImage(pil_img)
+                        break
+                    except Exception:
+                        logo_image = None
+            return logo_image
+        except Exception:
+            return None
+
+    def _read_velocity_display_value(self):
+        return self._parse_float_or_default(self.velocity_var.get(), GUI_DEFAULTS["velocity_kmh"])
+
+    def _write_velocity_display_value(self, value):
+        self.velocity_var.set(f"{float(value):.2f}".rstrip("0").rstrip("."))
+
+    def _sync_velocity_scale_limits(self):
+        if not hasattr(self, "velocity_scale"):
+            return
+        unit = self.speed_unit_var.get().strip()
+        minimum, maximum, resolution = SPEED_SLIDER_LIMITS.get(unit, SPEED_SLIDER_LIMITS["km/h"])
+        self.velocity_scale.configure(from_=minimum, to=maximum, resolution=resolution)
+
+    def _refresh_unit_labels(self):
+        speed_unit = self.speed_unit_var.get().strip() or "km/h"
+        force_unit = self.force_unit_var.get().strip() or "kg"
+        self.velocity_label_var.set(f"Velocity [{speed_unit}]")
+        self.drag_label_var.set(f"Drag [{force_unit}]")
+        current_lift_text = self.lift_label_var.get().strip().lower()
+        lift_prefix = "Downforce" if current_lift_text.startswith("downforce") else "Lift"
+        self.lift_label_var.set(f"{lift_prefix} [{force_unit}]")
+        self._sync_velocity_scale_limits()
+
+    def _set_preset_or_custom(self):
+        speed_unit = self.speed_unit_var.get().strip()
+        force_unit = self.force_unit_var.get().strip()
+        for preset_name, preset_units in UNIT_PRESETS.items():
+            if preset_units["speed"] == speed_unit and preset_units["force"] == force_unit:
+                self.unit_preset_var.set(preset_name)
+                return
+        self.unit_preset_var.set("Custom")
+
+    @staticmethod
+    def _format_force_display(value, force_unit):
+        if str(force_unit).strip() == "N":
+            return f"{float(value):.0f}"
+        return f"{float(value):.1f}"
+
+    def _apply_unit_preset(self, preset_name, *, keep_physical_speed=True):
+        preset_units = UNIT_PRESETS.get(preset_name)
+        if preset_units is None:
+            self._set_preset_or_custom()
+            self._refresh_unit_labels()
+            self.schedule_update()
+            return
+
+        old_speed_unit = self.speed_unit_var.get().strip() or "km/h"
+        speed_display = self._read_velocity_display_value()
+        speed_ms = speed_to_ms(speed_display, old_speed_unit)
+
+        self._syncing_units = True
+        try:
+            self.speed_unit_var.set(preset_units["speed"])
+            self.force_unit_var.set(preset_units["force"])
+            self.unit_preset_var.set(preset_name)
+            if keep_physical_speed:
+                new_speed_display = ms_to_speed(speed_ms, preset_units["speed"])
+                self._write_velocity_display_value(new_speed_display)
+        finally:
+            self._syncing_units = False
+        self._last_speed_unit = self.speed_unit_var.get().strip() or "km/h"
+
+        self._refresh_unit_labels()
+        self.schedule_update()
+
+    def on_unit_preset_changed(self, _event=None):
+        if self._syncing_units:
+            return
+        self._apply_unit_preset(self.unit_preset_var.get().strip(), keep_physical_speed=True)
+
+    def on_speed_unit_changed(self, _event=None):
+        if self._syncing_units:
+            return
+        old_speed_unit = self._last_speed_unit or "km/h"
+        old_speed_display = self._read_velocity_display_value()
+        speed_ms = speed_to_ms(old_speed_display, old_speed_unit)
+
+        self._syncing_units = True
+        try:
+            new_speed_display = ms_to_speed(speed_ms, self.speed_unit_var.get().strip())
+            self._write_velocity_display_value(new_speed_display)
+            self._set_preset_or_custom()
+        finally:
+            self._syncing_units = False
+        self._last_speed_unit = self.speed_unit_var.get().strip() or "km/h"
+        self._refresh_unit_labels()
+        self.schedule_update()
+
+    def on_force_unit_changed(self, _event=None):
+        if self._syncing_units:
+            return
+        self._set_preset_or_custom()
+        self._refresh_unit_labels()
+        self.schedule_update()
+
+    def _read_text_file(self, path: Path, fallback: str = ""):
+        try:
+            return path.read_text(encoding="utf-8")
+        except Exception:
+            try:
+                return path.read_text(encoding="latin-1")
+            except Exception:
+                return fallback
+
+    def _open_external_url(self, url: str):
+        try:
+            webbrowser.open_new_tab(url)
+        except Exception:
+            messagebox.showerror("Open link", f"Unable to open URL:\n{url}")
+
+    def open_licenses_window(self):
+        if self.licenses_window is not None:
+            try:
+                if self.licenses_window.winfo_exists():
+                    self.licenses_window.lift()
+                    self.licenses_window.focus_force()
+                    return
+            except Exception:
+                self.licenses_window = None
+
+        win = tk.Toplevel(self.root)
+        win.title("Licenses & Credits")
+        win.configure(bg=self.colors["bg"])
+        win.geometry("720x480")
+        try:
+            icon_path = Path(__file__).resolve().parent / "images" / "ico.ico"
+            if icon_path.exists():
+                win.iconbitmap(str(icon_path))
+        except Exception:
+            pass
+        self.licenses_window = win
+
+        def _close():
+            try:
+                win.destroy()
+            finally:
+                self.licenses_window = None
+
+        win.protocol("WM_DELETE_WINDOW", _close)
+
+        outer = ttk.Frame(win, padding=10)
+        outer.pack(fill="both", expand=True)
+        outer.columnconfigure(0, weight=1)
+        outer.rowconfigure(1, weight=1)
+
+        ttk.Label(
+            outer,
+            text="Manta Airfoil Tools | Brand: Manta Airlab | Fabio Giuliodori | Duilio.cc",
+            style="HeroBody.TLabel",
+        ).grid(row=0, column=0, sticky="w", pady=(0, 6))
+
+        notebook = ttk.Notebook(outer)
+        notebook.grid(row=1, column=0, sticky="nsew")
+
+        app_tab = ttk.Frame(notebook, padding=8)
+        third_tab = ttk.Frame(notebook, padding=8)
+        notebook.add(app_tab, text="Program License")
+        notebook.add(third_tab, text="Third-Party")
+
+        app_text = tk.Text(
+            app_tab,
+            wrap="word",
+            bg=self.colors["entry"],
+            fg=self.colors["text"],
+            insertbackground=self.colors["text"],
+            relief="flat",
+            borderwidth=1,
+            highlightthickness=1,
+            highlightbackground=self.colors["border"],
+            highlightcolor=self.colors["accent"],
+        )
+        app_text.pack(fill="both", expand=True)
+        app_notice = (
+            "Program license: GPL-3.0-only.\n"
+            "This software is provided WITHOUT ANY WARRANTY.\n"
+            "See LICENSE for full terms.\n\n"
+        )
+        app_notice += self._read_text_file(
+            Path(__file__).resolve().parent / "LICENSE",
+            fallback="LICENSE file not available.",
+        )
+        app_text.insert("1.0", app_notice)
+        app_text.configure(state="disabled")
+
+        third_text = tk.Text(
+            third_tab,
+            wrap="word",
+            bg=self.colors["entry"],
+            fg=self.colors["text"],
+            insertbackground=self.colors["text"],
+            relief="flat",
+            borderwidth=1,
+            highlightthickness=1,
+            highlightbackground=self.colors["border"],
+            highlightcolor=self.colors["accent"],
+        )
+        third_text.pack(fill="both", expand=True)
+        third_notice = (
+            "Minimum third-party references:\n"
+            "- XFOIL (Mark Drela / Harold Youngren, GPL upstream).\n"
+            "- UIUC LSAT/UIUC Airfoil Data references used by benchmark material.\n"
+            "  Terms and manifesto are referenced in project notices.\n\n"
+        )
+        third_notice += self._read_text_file(
+            Path(__file__).resolve().parent / "docs" / "THIRD_PARTY_NOTICES.md",
+            fallback="Third-party notices file not available.",
+        )
+        third_text.insert("1.0", third_notice)
+        third_text.configure(state="disabled")
+
+        ttk.Button(outer, text="Close", command=_close).grid(row=2, column=0, sticky="e", pady=(8, 0))
+
     def open_advanced_options(self):
         if self.advanced_window is not None:
             try:
@@ -638,6 +924,12 @@ class App:
         win.title("Advanced options")
         win.configure(bg=self.colors["bg"])
         win.resizable(False, False)
+        try:
+            icon_path = Path(__file__).resolve().parent / "images" / "ico.ico"
+            if icon_path.exists():
+                win.iconbitmap(str(icon_path))
+        except Exception:
+            pass
         self.advanced_window = win
 
         def _close():
@@ -653,6 +945,21 @@ class App:
 
         outer = ttk.Frame(win, padding=10)
         outer.pack(fill="both", expand=True)
+
+        advanced_header = ttk.Frame(outer, style="Hero.TFrame", padding=(10, 6))
+        advanced_header.pack(fill="x", pady=(0, 8))
+        advanced_header.columnconfigure(1, weight=1)
+
+        logo_label = ttk.Label(advanced_header, text="Manta Airfoil Tools", style="HeroTitle.TLabel")
+        self._advanced_logo_image = self._load_brand_logo_image(max_logo_width=200)
+        if self._advanced_logo_image is not None:
+            logo_label.configure(image=self._advanced_logo_image, text="")
+        logo_label.grid(row=0, column=0, sticky="w")
+        ttk.Label(
+            advanced_header,
+            text="Advanced Options",
+            style="HeroValue.TLabel",
+        ).grid(row=0, column=1, sticky="e")
 
         profile = ttk.LabelFrame(outer, text="Custom profile", padding=10)
         profile.pack(fill="x")
@@ -814,6 +1121,51 @@ class App:
             style="Muted.TLabel",
         ).grid(row=1, column=0, columnspan=2, sticky="w", pady=(4, 0))
 
+        units_frame = ttk.LabelFrame(outer, text="Units", padding=10)
+        units_frame.pack(fill="x", pady=(8, 0))
+        units_frame.columnconfigure(1, weight=1)
+        units_frame.columnconfigure(3, weight=1)
+
+        preset_values = [*UNIT_PRESETS.keys(), "Custom"]
+        ttk.Label(units_frame, text="Preset").grid(row=0, column=0, sticky="w", padx=(0, 6), pady=2)
+        preset_combo = ttk.Combobox(
+            units_frame,
+            textvariable=self.unit_preset_var,
+            values=preset_values,
+            state="readonly",
+            width=14,
+        )
+        preset_combo.grid(row=0, column=1, sticky="ew", pady=2)
+        preset_combo.bind("<<ComboboxSelected>>", self.on_unit_preset_changed)
+
+        ttk.Label(units_frame, text="Speed unit").grid(row=0, column=2, sticky="w", padx=(8, 6), pady=2)
+        speed_unit_combo = ttk.Combobox(
+            units_frame,
+            textvariable=self.speed_unit_var,
+            values=list(SPEED_SLIDER_LIMITS.keys()),
+            state="readonly",
+            width=10,
+        )
+        speed_unit_combo.grid(row=0, column=3, sticky="ew", pady=2)
+        speed_unit_combo.bind("<<ComboboxSelected>>", self.on_speed_unit_changed)
+
+        ttk.Label(units_frame, text="Force unit").grid(row=1, column=0, sticky="w", padx=(0, 6), pady=2)
+        force_unit_combo = ttk.Combobox(
+            units_frame,
+            textvariable=self.force_unit_var,
+            values=["kg", "N", "lb"],
+            state="readonly",
+            width=10,
+        )
+        force_unit_combo.grid(row=1, column=1, sticky="ew", pady=2)
+        force_unit_combo.bind("<<ComboboxSelected>>", self.on_force_unit_changed)
+
+        ttk.Label(
+            units_frame,
+            text="Internal calculations stay in SI. Units affect only input/output display.",
+            style="Muted.TLabel",
+        ).grid(row=1, column=2, columnspan=2, sticky="w", pady=(2, 0))
+
         guards = ttk.LabelFrame(outer, text="Interpolation guards", padding=10)
         guards.pack(fill="x", pady=(8, 0))
         guards.columnconfigure(1, weight=1)
@@ -849,6 +1201,12 @@ class App:
         win.title("Library Browser")
         win.configure(bg=self.colors["bg"])
         win.geometry("1280x960")
+        try:
+            icon_path = Path(__file__).resolve().parent / "images" / "ico.ico"
+            if icon_path.exists():
+                win.iconbitmap(str(icon_path))
+        except Exception:
+            pass
         self.library_browser_window = win
 
         def _close():
@@ -866,6 +1224,22 @@ class App:
         outer = ttk.Frame(win, padding=10)
         outer.pack(fill="both", expand=True)
         outer.columnconfigure(0, weight=1)
+
+        browser_header = ttk.Frame(outer, style="Hero.TFrame", padding=(10, 6))
+        browser_header.pack(fill="x", pady=(0, 8))
+        browser_header.columnconfigure(0, weight=1)
+        browser_header.columnconfigure(1, weight=0)
+
+        browser_left = ttk.Frame(browser_header, style="Hero.TFrame")
+        browser_left.grid(row=0, column=0, sticky="w")
+        browser_title_row = ttk.Frame(browser_left, style="Hero.TFrame")
+        browser_title_row.pack(anchor="w")
+        ttk.Label(browser_title_row, text="Manta Airfoil Tools", style="HeroTitle.TLabel").pack(side="left")
+        ttk.Label(browser_left, text="Brand: Manta Airlab | Fabio Giuliodori | Duilio.cc", style="HeroSignature.TLabel").pack(anchor="w", pady=(2, 0))
+
+        browser_right = ttk.Frame(browser_header, style="Hero.TFrame")
+        browser_right.grid(row=0, column=1, sticky="e")
+        ttk.Label(browser_right, text="Library Browser", style="HeroValue.TLabel").pack(anchor="e")
 
         filters = ttk.LabelFrame(outer, text="Usage Presets", padding=8)
         filters.pack(fill="x")
@@ -1047,8 +1421,8 @@ class App:
         header_left.grid(row=0, column=0, sticky="nsew")
         title_row = ttk.Frame(header_left, style="Hero.TFrame")
         title_row.pack(anchor="w")
-        ttk.Label(title_row, text="Manta AirLab", style="HeroTitle.TLabel").pack(side="left")
-        ttk.Label(title_row, text="by Fabio Giuliodori | duilio.cc", style="HeroSignature.TLabel").pack(side="left", padx=(8, 0), pady=(2, 0))
+        ttk.Label(title_row, text="Manta Airfoil Tools", style="HeroTitle.TLabel").pack(side="left")
+        ttk.Label(title_row, text="Brand: Manta Airlab | Fabio Giuliodori | Duilio.cc", style="HeroSignature.TLabel").pack(side="left", padx=(8, 0), pady=(2, 0))
 
         header_right = ttk.Frame(header, style="Hero.TFrame", padding=(10, 0, 0, 0))
         header_right.grid(row=0, column=1, sticky="e")
@@ -1090,6 +1464,7 @@ class App:
         self.pts_format_var = tk.StringVar(value=GUI_DEFAULTS["pts_format"])
         self.csv_format_var = tk.StringVar(value=GUI_DEFAULTS["csv_format"])
         self.advanced_window = None
+        self.licenses_window = None
         self.advanced_mode_combo = None
         self.advanced_radius_entry = None
         self.advanced_curv_dir_combo = None
@@ -1099,10 +1474,18 @@ class App:
         self._library_browser_rows = []
         self._library_radar_points = []
         self._library_total_rated_count = None
+        self._naca_only_widgets = []
+        self._naca_widget_grid = {}
         # Advanced aerodynamic source toggle kept for future UI re-enable.
         # To restore it, add back the checkbox in the Aerodynamics panel and
         # switch `use_internal_library=True` in `compute_aero_results()` to this variable.
         self.use_internal_aero_var = tk.BooleanVar(value=True)
+        self._syncing_units = False
+        self.unit_preset_var = tk.StringVar(value=GUI_DEFAULTS.get("unit_preset", "Metric"))
+        self.speed_unit_var = tk.StringVar(value=GUI_DEFAULTS.get("speed_unit", "km/h"))
+        self.force_unit_var = tk.StringVar(value=GUI_DEFAULTS.get("force_unit", "kg"))
+        self._last_speed_unit = self.speed_unit_var.get()
+        self.velocity_label_var = tk.StringVar(value=f"Velocity [{self.speed_unit_var.get()}]")
         self.fluid_var = tk.StringVar(value=GUI_DEFAULTS["fluid"])
         self.velocity_var = tk.StringVar(value=GUI_DEFAULTS["velocity_kmh"])
         self.temperature_c_var = tk.StringVar(value=GUI_DEFAULTS.get("temperature_c", "20"))
@@ -1123,13 +1506,15 @@ class App:
         self.cl_out_var = tk.StringVar(value="-")
         self.cd_out_var = tk.StringVar(value="-")
         self.cm_out_var = tk.StringVar(value="-")
+        self.cm_x_out_var = tk.StringVar(value="-")
         self.aero_source_var = tk.StringVar(value="db_interpolated")
         self.xfoil_status_var = tk.StringVar(value="XFOIL idle")
         self.lift_out_var = tk.StringVar(value="-")
         self.drag_out_var = tk.StringVar(value="-")
         self.ld_out_var = tk.StringVar(value="-")
-        self.lift_label_var = tk.StringVar(value="Lift [kg]")
-        self.drag_label_var = tk.StringVar(value="Drag [kg]")
+        force_unit = self.force_unit_var.get()
+        self.lift_label_var = tk.StringVar(value=f"Lift [{force_unit}]")
+        self.drag_label_var = tk.StringVar(value=f"Drag [{force_unit}]")
         self.naca_camber_var = tk.IntVar(value=GUI_DEFAULTS["naca_camber"])
         self.naca_pos_var = tk.IntVar(value=GUI_DEFAULTS["naca_pos"])
         self.naca_thickness_var = tk.IntVar(value=GUI_DEFAULTS["naca_thickness"])
@@ -1151,7 +1536,7 @@ class App:
         source_buttons.columnconfigure(1, weight=1)
         naca_btn = tk.Button(
             source_buttons,
-            text="NACA",
+            text="Gen NACA4",
             relief="flat",
             bd=1,
             padx=8,
@@ -1168,7 +1553,7 @@ class App:
         naca_btn.grid(row=0, column=0, sticky="ew", padx=(0, 4))
         library_btn = tk.Button(
             source_buttons,
-            text="LIBRARY",
+            text="Library Wing",
             relief="flat",
             bd=1,
             padx=8,
@@ -1198,7 +1583,8 @@ class App:
         self.library_profile_combo.bind("<<ComboboxSelected>>", self.schedule_update)
 
         row += 1
-        ttk.Label(geom, text="NACA profile", style="Panel.TLabel").grid(row=row, column=0, sticky="w", padx=(0, 4), pady=(1, 1))
+        naca_profile_label = ttk.Label(geom, text="NACA profile", style="Panel.TLabel")
+        naca_profile_label.grid(row=row, column=0, sticky="w", padx=(0, 4), pady=(1, 1))
         self.code_entry = tk.Entry(
             geom,
             textvariable=self.code_var,
@@ -1234,7 +1620,8 @@ class App:
         self.mode_combo = mode_combo
 
         row += 1
-        ttk.Label(geom, text="Camber | camber position | thickness", style="Muted.TLabel").grid(
+        naca_hint_label = ttk.Label(geom, text="Camber | camber position | thickness", style="Muted.TLabel")
+        naca_hint_label.grid(
             row=row, column=0, columnspan=4, sticky="w", pady=(1, 4)
         )
 
@@ -1243,8 +1630,12 @@ class App:
             ("Camber", self.naca_camber_var, 0, 9),
             ("Pos", self.naca_pos_var, 0, 9),
         )
+        naca_slider_labels = []
+        naca_digit_scales = []
         for col, (label, var, min_v, max_v) in enumerate(slider_specs):
-            ttk.Label(geom, text=label, style="Panel.TLabel").grid(row=row, column=col, sticky="w", pady=(0, 1))
+            slider_label = ttk.Label(geom, text=label, style="Panel.TLabel")
+            slider_label.grid(row=row, column=col, sticky="w", pady=(0, 1))
+            naca_slider_labels.append(slider_label)
             scale = tk.Scale(
                 geom,
                 from_=min_v,
@@ -1262,9 +1653,11 @@ class App:
                 command=self.on_digit_slider_changed,
             )
             scale.grid(row=row + 1, column=col, sticky="ew", padx=(0, 4), pady=(0, 2))
+            naca_digit_scales.append(scale)
             self.tk_scale_widgets.append(scale)
 
-        ttk.Label(geom, text="Thickness", style="Panel.TLabel").grid(row=row, column=2, columnspan=2, sticky="w", pady=(0, 1))
+        thickness_label = ttk.Label(geom, text="Thickness", style="Panel.TLabel")
+        thickness_label.grid(row=row, column=2, columnspan=2, sticky="w", pady=(0, 1))
         self.thickness_scale = tk.Scale(
             geom,
             from_=1,
@@ -1283,6 +1676,16 @@ class App:
         )
         self.thickness_scale.grid(row=row + 1, column=2, columnspan=2, sticky="ew", padx=(0, 4), pady=(0, 2))
         self.tk_scale_widgets.append(self.thickness_scale)
+        self._naca_only_widgets = [
+            naca_profile_label,
+            self.code_entry,
+            naca_hint_label,
+            *naca_slider_labels,
+            *naca_digit_scales,
+            thickness_label,
+            self.thickness_scale,
+        ]
+        self._naca_widget_grid = {widget: dict(widget.grid_info()) for widget in self._naca_only_widgets}
 
         row += 2
         ttk.Label(geom, text="Chord [mm]", style="Panel.TLabel").grid(row=row, column=0, sticky="w", padx=(0, 4), pady=(3, 1))
@@ -1406,7 +1809,7 @@ class App:
         )
         self.fluid_combo.grid(row=arow, column=1, sticky="ew", pady=2)
         self.fluid_combo.bind("<<ComboboxSelected>>", self.on_fluid_changed)
-        ttk.Label(aero, text="Velocity [km/h]", style="Panel.TLabel").grid(row=arow, column=2, sticky="w", padx=(8, 4), pady=1)
+        ttk.Label(aero, textvariable=self.velocity_label_var, style="Panel.TLabel").grid(row=arow, column=2, sticky="w", padx=(8, 4), pady=1)
         e = ttk.Entry(aero, textvariable=self.velocity_var, width=10)
         e.grid(row=arow, column=3, sticky="ew", pady=2)
         e.bind("<KeyRelease>", self.schedule_update)
@@ -1597,10 +2000,13 @@ class App:
         kpi_frame.pack(fill="x", expand=False, pady=(8, 0))
         kpi_frame.columnconfigure(1, weight=1)
         kpi_frame.columnconfigure(3, weight=1)
+        kpi_frame.columnconfigure(5, weight=1)
         ttk.Label(kpi_frame, textvariable=self.lift_label_var, style="SummaryLabel.TLabel").grid(row=0, column=0, sticky="w", padx=(0, 4))
         ttk.Label(kpi_frame, textvariable=self.lift_out_var, style="KPIValue.TLabel").grid(row=0, column=1, sticky="w", padx=(0, 18))
         ttk.Label(kpi_frame, textvariable=self.drag_label_var, style="SummaryLabel.TLabel").grid(row=0, column=2, sticky="w", padx=(0, 4))
         ttk.Label(kpi_frame, textvariable=self.drag_out_var, style="KPIValueAlt.TLabel").grid(row=0, column=3, sticky="w")
+        ttk.Label(kpi_frame, text="Cm | x_cm", style="SummaryLabel.TLabel").grid(row=0, column=4, sticky="w", padx=(18, 4))
+        ttk.Label(kpi_frame, textvariable=self.cm_x_out_var, style="SummaryValue.TLabel").grid(row=0, column=5, sticky="w")
 
         preview_frame = ttk.LabelFrame(bottom_frame, text="Point Preview", padding=8)
         preview_frame.pack(fill="x", expand=False, pady=(8, 0))
@@ -1646,13 +2052,36 @@ class App:
         xscroll.pack(fill="x", pady=(2, 0))
         self.text.configure(xscrollcommand=xscroll.set, yscrollcommand=yscroll.set)
 
-        footer = ttk.Label(
+        licenses_link = tk.Label(
             right,
-            text="Manta AirLab — Airfoil Tools by Fabio Giuliodori | duilio.cc",
-            style="Footer.TLabel",
+            text="Licenses & Credits",
+            bg=self.colors["bg"],
+            fg=self.colors["accent"],
+            cursor="hand2",
+            font=("Segoe UI", 9, "underline"),
         )
-        footer.pack(anchor="e", pady=(10, 0))
+        licenses_link.pack(anchor="e", pady=(8, 0))
+        licenses_link.bind("<Button-1>", lambda _event: self.open_licenses_window())
+
+        footer_row = ttk.Frame(right, style="Panel.TFrame")
+        footer_row.pack(anchor="e", pady=(4, 0))
+        program_link = ttk.Label(footer_row, text="Manta Airfoil Tools", style="FooterLink.TLabel", cursor="hand2")
+        program_link.pack(side="left")
+        program_link.bind("<Button-1>", lambda _event: self._open_external_url("https://github.com/Giuliodori/manta-airfoil-tools"))
+
+        ttk.Label(footer_row, text=" | Manta Airlab | ", style="Footer.TLabel").pack(side="left")
+
+        author_link = ttk.Label(footer_row, text="Fabio Giuliodori", style="FooterLink.TLabel", cursor="hand2")
+        author_link.pack(side="left")
+        author_link.bind("<Button-1>", lambda _event: self._open_external_url("https://github.com/Giuliodori"))
+
+        ttk.Label(footer_row, text=" | ", style="Footer.TLabel").pack(side="left")
+
+        sponsor_link = ttk.Label(footer_row, text="Duilio.cc", style="FooterLink.TLabel", cursor="hand2")
+        sponsor_link.pack(side="left")
+        sponsor_link.bind("<Button-1>", lambda _event: self._open_external_url("https://duilio.cc/"))
         self.setup_variable_sync()
+        self._apply_unit_preset(self.unit_preset_var.get().strip(), keep_physical_speed=False)
         self.root.after_idle(self.initialize_pane_layout)
 
     def configure_plot_theme(self):
@@ -2066,7 +2495,8 @@ class App:
             font=("Segoe UI", 11),
         )
 
-        for ring in (0.2, 0.4, 0.6, 0.8, 1.0):
+        ring_steps = (1.0, 0.8, 0.6, 0.4, 0.2)
+        for ring in ring_steps:
             points = []
             for angle in axis_angles:
                 points.extend([cx + radius * ring * math.cos(angle), cy + radius * ring * math.sin(angle)])
@@ -2203,9 +2633,21 @@ class App:
         self.nd_re_limit_var.set(f"{re_limit:g}")
         self.nd_alpha_steps_var.set(f"{alpha_limit:g}")
 
+    def _set_naca_controls_visible(self, visible):
+        for widget in self._naca_only_widgets:
+            if widget is None:
+                continue
+            if visible:
+                grid_info = self._naca_widget_grid.get(widget)
+                if grid_info:
+                    widget.grid(**grid_info)
+            else:
+                widget.grid_remove()
+
     def update_source_fields(self):
         is_naca = self.source_internal_value() == "naca"
         self._refresh_source_entry_buttons()
+        self._set_naca_controls_visible(is_naca)
         naca_state = "normal" if is_naca else "disabled"
         naca_slider_state = "normal" if is_naca else "disabled"
         self.code_entry.config(state=naca_state)
@@ -2581,7 +3023,17 @@ class App:
 
     @staticmethod
     def _pick_nearest_alpha_row(rows, target_alpha):
-        return min(rows, key=lambda row: abs(float(row["alpha"]) - float(target_alpha)))
+        target = float(target_alpha)
+        if abs(target) <= 1e-6:
+            return min(rows, key=lambda row: abs(float(row["alpha"]) - target))
+
+        same_sign_rows = [row for row in rows if float(row["alpha"]) * target > 0.0]
+        if same_sign_rows:
+            return min(same_sign_rows, key=lambda row: abs(float(row["alpha"]) - target))
+
+        if abs(target) >= 0.5:
+            raise RuntimeError("non_converged")
+        return min(rows, key=lambda row: abs(float(row["alpha"]) - target))
 
     @staticmethod
     def _build_xfoil_input(dat_name, polar_name, reynolds, mach, ncrit, operation_lines):
@@ -2742,10 +3194,15 @@ class App:
             else:
                 density = float(self.density_var.get().replace(",", "."))
                 viscosity = float(self.viscosity_var.get().replace(",", "."))
-            velocity = float(self.velocity_var.get().replace(",", ".")) / 3.6
+            speed_display = self._parse_float_or_default(self.velocity_var.get(), GUI_DEFAULTS["velocity_kmh"])
+            speed_unit = self.speed_unit_var.get().strip() or "km/h"
+            velocity = speed_to_ms(speed_display, speed_unit)
             reynolds = compute_reynolds(velocity, vals["chord"], density, viscosity)
 
-            repo_root = Path(__file__).resolve().parent
+            if getattr(sys, "frozen", False):
+                repo_root = Path(sys.executable).resolve().parent
+            else:
+                repo_root = Path(__file__).resolve().parent
             xfoil_path = repo_root / "xfoil" / "xfoil.exe"
             if not xfoil_path.exists():
                 results = ensure_runtime_assets(include_airfoil_db=False, include_xfoil=True, assume_yes=True)
@@ -2913,6 +3370,7 @@ class App:
         persistent_widgets = {
             getattr(self, "temperature_label", None),
             getattr(self, "temperature_entry", None),
+            getattr(self, "velocity_scale", None),
             getattr(self, "xfoil_button", None),
             getattr(self, "aero_source_label", None),
             getattr(self, "aero_source_value_label", None),
@@ -3052,9 +3510,10 @@ class App:
             # For an inverted section, the visually intuitive rotation that
             # increases downforce is opposite to the baseline aero sign.
             alpha = -alpha
-        velocity_kmh = float(self.velocity_var.get().replace(",", "."))
+        speed_display = self._parse_float_or_default(self.velocity_var.get(), GUI_DEFAULTS["velocity_kmh"])
+        speed_unit = self.speed_unit_var.get().strip() or "km/h"
         span_mm = float(self.span_var.get().replace(",", "."))
-        velocity = velocity_kmh / 3.6
+        velocity = speed_to_ms(speed_display, speed_unit)
         chord = vals["chord"]
         span = span_mm / 1000.0
 
@@ -3116,6 +3575,9 @@ class App:
             force_nd = False
         if vals["mirror_x"]:
             cl = -cl
+        x_cm = None
+        if abs(float(cl)) > 1e-8:
+            x_cm = 0.25 - (float(cm) / float(cl))
         lift, drag, ld_ratio = compute_lift_drag(density=density, velocity=velocity, area=area, cl=cl, cd=cd)
 
         return {
@@ -3123,6 +3585,7 @@ class App:
             "cl": cl,
             "cd": cd,
             "cm": cm,
+            "x_cm": x_cm,
             "temperature_c": temp_c,
             "lift": lift,
             "drag": drag,
@@ -3137,30 +3600,39 @@ class App:
             self.cl_out_var.set("-")
             self.cd_out_var.set("-")
             self.cm_out_var.set("-")
+            self.cm_x_out_var.set("-")
             self.lift_out_var.set("-")
             self.drag_out_var.set("-")
             self.ld_out_var.set("-")
-            self.lift_label_var.set("Lift [kg]")
-            self.drag_label_var.set("Drag [kg]")
+            self._refresh_unit_labels()
             self._set_aero_source_visual("-")
             return
         self.reynolds_out_var.set(f"{aero['reynolds']:.3e}")
         self.cl_out_var.set(f"{aero['cl']:.4f}")
         self.cd_out_var.set(f"{aero['cd']:.4f}")
         self.cm_out_var.set(f"{aero.get('cm', 0.0):.4f}")
-        lift_kg = aero["lift"] / 9.80665
-        drag_kg = aero["drag"] / 9.80665
-        self.lift_label_var.set("Downforce [kg]" if lift_kg < 0 else "Lift [kg]")
-        self.drag_label_var.set("Drag [kg]")
-        self.lift_out_var.set(f"{lift_kg:.1f}")
-        self.drag_out_var.set(f"{drag_kg:.1f}")
+        force_unit = self.force_unit_var.get().strip() or "kg"
+        lift_display = force_from_newton(aero["lift"], force_unit)
+        drag_display = force_from_newton(aero["drag"], force_unit)
+        is_estimate = (aero.get("params_source", "") != "xfoil_live")
+        prefix = "~" if is_estimate else ""
+        self.lift_label_var.set(f"Downforce [{force_unit}]" if lift_display < 0 else f"Lift [{force_unit}]")
+        self.drag_label_var.set(f"Drag [{force_unit}]")
+        self.lift_out_var.set(f"{prefix}{self._format_force_display(lift_display, force_unit)}")
+        self.drag_out_var.set(f"{prefix}{self._format_force_display(drag_display, force_unit)}")
         self.ld_out_var.set(f"{aero['ld_ratio']:.3f}")
+        x_cm = aero.get("x_cm", None)
+        if x_cm is None or not math.isfinite(float(x_cm)):
+            self.cm_x_out_var.set(f"{aero.get('cm', 0.0):.4f} | -")
+        else:
+            self.cm_x_out_var.set(f"{aero.get('cm', 0.0):.4f} | {float(x_cm) * 100.0:.1f}% c")
         self._set_aero_source_visual(aero.get("params_source", "fallback"))
 
     def show_aero_forces_nd(self):
         self.lift_out_var.set("ND")
         self.drag_out_var.set("ND")
         self.ld_out_var.set("ND")
+        self.cm_x_out_var.set("ND")
 
     def get_values(self):
         source_kind = self.source_internal_value()
@@ -3274,6 +3746,7 @@ class App:
             self.cl_out_var.set("-")
             self.cd_out_var.set("-")
             self.cm_out_var.set("-")
+            self.cm_x_out_var.set("-")
             self.lift_out_var.set("-")
             self.drag_out_var.set("-")
             self.ld_out_var.set("-")
@@ -3338,7 +3811,9 @@ class App:
             spine.set_color(self.colors["muted"])
 
         try:
-            velocity_kmh = float(self.velocity_var.get().replace(",", "."))
+            speed_display = self._parse_float_or_default(self.velocity_var.get(), GUI_DEFAULTS["velocity_kmh"])
+            velocity_ms = speed_to_ms(speed_display, self.speed_unit_var.get().strip() or "km/h")
+            velocity_kmh = ms_to_speed(velocity_ms, "km/h")
         except ValueError:
             velocity_kmh = 0.0
 
@@ -3350,12 +3825,43 @@ class App:
             base = max(vals["chord"] * 1000.0 * 0.02, 1e-6)
             x_center = 0.5 * (xmin + xmax)
             y_center = 0.5 * (ymin + ymax)
+            force_origin_x = x_center
+            force_origin_y = y_center
             span_ref = max(dx, dy, vals["chord"] * 1000.0)
             pad_x = max(dx * 0.08, base)
             pad_y = max(dy * 0.12, base)
             drag_arrow = None
             flow_arrow_len = None
+            cm_marker = None
             if aero is not None:
+                x_cm = aero.get("x_cm", None)
+                if x_cm is not None:
+                    try:
+                        x_cm = float(x_cm)
+                    except Exception:
+                        x_cm = None
+                if x_cm is not None and math.isfinite(x_cm):
+                    chord_mm = vals["chord"] * 1000.0
+                    x_cm_chord = x_cm * chord_mm
+                    y_cm_chord = 0.0
+                    if vals.get("mirror_y"):
+                        x_cm_chord = -x_cm_chord
+                    if vals.get("mirror_x"):
+                        y_cm_chord = -y_cm_chord
+                    angle_deg = float(vals.get("angle_deg") or 0.0)
+                    if abs(angle_deg) > 1e-12:
+                        ang = math.radians(-angle_deg)
+                        c = math.cos(ang)
+                        s = math.sin(ang)
+                        x_cm_plot = x_cm_chord * c - y_cm_chord * s
+                        y_cm_plot = x_cm_chord * s + y_cm_chord * c
+                    else:
+                        x_cm_plot = x_cm_chord
+                        y_cm_plot = y_cm_chord
+                    force_origin_x = float(x_cm_plot)
+                    force_origin_y = float(y_cm_plot)
+                    cm_marker = (force_origin_x, force_origin_y)
+
                 arrow_ref = max(span_ref * 0.28, 12.0)
                 force_refs = self.compute_force_references(vals)
                 force_scale = max(force_refs["lift"], force_refs["drag"], 1e-9)
@@ -3363,12 +3869,12 @@ class App:
                 lift_len = max(arrow_ref * (abs(aero["lift"]) / force_scale), min_force_arrow)
                 drag_len = max(arrow_ref * (abs(aero["drag"]) / force_scale), min_force_arrow)
                 flow_arrow_len = lift_len + drag_len
-                lift_tip_y = y_center + (lift_len if aero["lift"] >= 0 else -lift_len)
+                lift_tip_y = force_origin_y + (lift_len if aero["lift"] >= 0 else -lift_len)
 
                 self.ax.annotate(
                     "",
-                    xy=(x_center, lift_tip_y),
-                    xytext=(x_center, y_center),
+                    xy=(force_origin_x, lift_tip_y),
+                    xytext=(force_origin_x, force_origin_y),
                     arrowprops=dict(
                         arrowstyle="-|>",
                         color=self.colors["lift"],
@@ -3378,15 +3884,15 @@ class App:
                         shrinkB=0,
                     ),
                 )
-                xmin = min(xmin, x_center)
-                xmax = max(xmax, x_center)
-                ymin = min(ymin, y_center, lift_tip_y)
-                ymax = max(ymax, y_center, lift_tip_y)
+                xmin = min(xmin, force_origin_x)
+                xmax = max(xmax, force_origin_x)
+                ymin = min(ymin, force_origin_y, lift_tip_y)
+                ymax = max(ymax, force_origin_y, lift_tip_y)
 
                 drag_arrow = {
                     "length": drag_len,
-                    "origin_x": x_center,
-                    "origin_y": y_center,
+                    "origin_x": force_origin_x,
+                    "origin_y": force_origin_y,
                 }
 
             flow_y = ymax + pad_y * 0.45
@@ -3430,6 +3936,23 @@ class App:
                 xmax = max(xmax, drag_tip_x)
                 ymin = min(ymin, drag_band_y)
                 ymax = max(ymax, drag_band_y)
+
+            if cm_marker is not None:
+                x_marker, y_marker = cm_marker
+                self.ax.plot(
+                    [x_marker],
+                    [y_marker],
+                    marker="o",
+                    markersize=6,
+                    markerfacecolor=self.colors["drag"],
+                    markeredgecolor=self.colors["fg"],
+                    markeredgewidth=0.9,
+                    zorder=6,
+                )
+                xmin = min(xmin, x_marker)
+                xmax = max(xmax, x_marker)
+                ymin = min(ymin, y_marker)
+                ymax = max(ymax, y_marker)
 
             xmax = max(xmax, flow_x1)
             ymax = max(ymax, flow_y)
@@ -3695,8 +4218,8 @@ def _positive_int(value: str, name: str, minimum: int = 1):
 def build_cli_parser():
     parser = argparse.ArgumentParser(
         prog="manta_airfoil_tools.py",
-        description="Manta AirLab CLI for Airfoil Tools (GUI remains the default with no arguments).",
-        epilog="Manta AirLab — Airfoil Tools by Fabio Giuliodori | duilio.cc",
+        description="Manta Airfoil Tools CLI (GUI remains the default with no arguments).",
+        epilog="Manta Airfoil Tools | Manta Airlab | Fabio Giuliodori | Duilio.cc",
     )
     subparsers = parser.add_subparsers(dest="command")
 
@@ -3942,5 +4465,6 @@ def run_cli(argv):
 
 if __name__ == "__main__":
     main()
+
 
 

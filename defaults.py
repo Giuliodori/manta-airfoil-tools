@@ -43,6 +43,9 @@ GUI_DEFAULTS = {
     "naca_pos": 4,
     "naca_thickness": 12,
     "show_expert": False,
+    "unit_preset": "Metric",
+    "speed_unit": "km/h",
+    "force_unit": "kg",
 }
 
 CLI_DEFAULTS = {

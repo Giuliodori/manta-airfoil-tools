@@ -12,10 +12,11 @@ Validation ground truth is experimental data; quick estimates and `XFOIL` are co
 
 Repository: `manta-airfoil-tools`
 Brand: `Manta Airlab`
-Founder: `Fabio Giuliodori`
+Author: `Fabio Giuliodori`
 Open-source sponsor: [`Duilio.cc`](https://duilio.cc)
 
-![gui](images/gui.jpg)
+![Main GUI](images/gui.png)
+![Library Browser](images/library_browser.png)
 
 Download the latest Windows release:
 
@@ -52,8 +53,8 @@ Manta Airlab compresses that workflow into one local app with direct GUI editing
 
 ## Fastest way to try it (Windows)
 
-1. Download `manta-airfoil-tools.exe` from the latest release.
-2. Run `dist\manta-airfoil-tools.exe` if you cloned the repository.
+1. Download `Manta_Airfoil_Tools_portable_<version>.exe` from the latest release.
+2. Run `dist\Manta_Airfoil_Tools_portable_<version>.exe` if you cloned the repository.
 3. Alternative from source folder: run `manta_airfoil_tools.bat`.
 
 Unsigned executables may show a SmartScreen prompt on first launch.
@@ -83,7 +84,7 @@ Manta Airlab is created and maintained by `Fabio Giuliodori`.
 
 Preferred credit when mentioning or showcasing the project:
 
-`Manta Airlab - Airfoil Tools by Fabio Giuliodori | Duilio.cc`
+`Manta Airfoil Tools | Manta Airlab | Fabio Giuliodori | Duilio.cc`
 
 ## License
 
