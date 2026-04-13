@@ -135,6 +135,15 @@ THEME_KEY_TO_LABEL = {
 }
 THEME_OPTION_LABELS = tuple(THEME_LABEL_TO_KEY.keys())
 
+LIBRARY_USAGE_PRESET_TOKENS = {
+    "All": "",
+    "Symmetric": "symmetric",
+    "Autostable": "stability_trim",
+    "Rotating": "rotor_efficiency",
+    "High Lift": "high_lift",
+    "General Purpose": "general_purpose",
+}
+
 
 def _load_plotting_deps():
     global np, FigureCanvasTkAgg, Figure, Poly3DCollection
@@ -600,6 +609,10 @@ class App:
                 troughcolor=self.colors["entry"],
                 activebackground=self.colors["accent"],
             )
+        if hasattr(self, "_source_entry_buttons"):
+            self._refresh_source_entry_buttons()
+        if hasattr(self, "_library_usage_buttons"):
+            self._refresh_library_usage_preset_buttons()
 
         if hasattr(self, "canvas") and hasattr(self, "ax"):
             if self.last_x is None or self.last_y is None:
@@ -835,7 +848,7 @@ class App:
         win = tk.Toplevel(self.root)
         win.title("Library Browser")
         win.configure(bg=self.colors["bg"])
-        win.geometry("980x620")
+        win.geometry("1280x960")
         self.library_browser_window = win
 
         def _close():
@@ -844,6 +857,9 @@ class App:
             finally:
                 self.library_browser_window = None
                 self.library_results_listbox = None
+                self.library_radar_canvas = None
+                self._library_radar_points = []
+                self._library_usage_buttons = {}
 
         win.protocol("WM_DELETE_WINDOW", _close)
 
@@ -851,67 +867,69 @@ class App:
         outer.pack(fill="both", expand=True)
         outer.columnconfigure(0, weight=1)
 
-        filters = ttk.LabelFrame(outer, text="Filters & Ranking", padding=8)
+        filters = ttk.LabelFrame(outer, text="Usage Presets", padding=8)
         filters.pack(fill="x")
-        for col in (1, 3):
-            filters.columnconfigure(col, weight=1)
-
-        ttk.Label(filters, text="Search").grid(row=0, column=0, sticky="w", padx=(0, 6), pady=2)
-        search_entry = ttk.Entry(filters, textvariable=self.library_search_var, width=18)
-        search_entry.grid(row=0, column=1, sticky="ew", pady=2)
-        search_entry.bind("<KeyRelease>", self.on_library_filter_changed)
-
-        ttk.Label(filters, text="Usage").grid(row=0, column=2, sticky="w", padx=(10, 6), pady=2)
-        usage_entry = ttk.Entry(filters, textvariable=self.library_usage_filter_var, width=18)
-        usage_entry.grid(row=0, column=3, sticky="ew", pady=2)
-        usage_entry.bind("<KeyRelease>", self.on_library_filter_changed)
-
-        ttk.Label(filters, text="Sort").grid(row=1, column=0, sticky="w", padx=(0, 6), pady=2)
-        sort_combo = ttk.Combobox(
-            filters,
-            textvariable=self.library_sort_var,
-            values=["Name", "Performance", "Docility", "Robustness", "Confidence", "Weighted"],
-            state="readonly",
-            width=16,
+        ttk.Label(filters, text="Search profile", style="Panel.TLabel").grid(
+            row=0, column=0, sticky="w", pady=(0, 4)
         )
-        sort_combo.grid(row=1, column=1, sticky="ew", pady=2)
-        sort_combo.bind("<<ComboboxSelected>>", self.on_library_filter_changed)
+        search_entry = ttk.Entry(filters, textvariable=self.library_search_var, width=28)
+        search_entry.grid(row=0, column=1, sticky="ew", padx=(8, 0), pady=(0, 4))
+        search_entry.bind("<KeyRelease>", lambda _event: self.refresh_library_browser_results())
+        filters.columnconfigure(1, weight=1)
 
-        ttk.Label(filters, text="Top N").grid(row=1, column=2, sticky="w", padx=(10, 6), pady=2)
-        topn_entry = ttk.Entry(filters, textvariable=self.library_top_n_var, width=10)
-        topn_entry.grid(row=1, column=3, sticky="ew", pady=2)
-        topn_entry.bind("<KeyRelease>", self.on_library_filter_changed)
-
-        ttk.Label(filters, text="Weights: Perf / Doc / Rob / Conf", style="Muted.TLabel").grid(
-            row=2, column=0, columnspan=4, sticky="w", pady=(4, 2)
-        )
-        scales_row = ttk.Frame(filters)
-        scales_row.grid(row=3, column=0, columnspan=4, sticky="ew")
-        for idx in range(4):
-            scales_row.columnconfigure(idx, weight=1)
-        for idx, var in enumerate((self.rank_perf_var, self.rank_doc_var, self.rank_rob_var, self.rank_conf_var)):
-            scale = tk.Scale(
-                scales_row,
-                from_=0,
-                to=100,
-                orient="horizontal",
-                variable=var,
-                showvalue=False,
-                resolution=1,
-                bg=self.colors["panel"],
-                fg=self.colors["fg"],
-                highlightthickness=0,
-                troughcolor=self.colors["entry"],
-                activebackground=self.colors["accent"],
-                command=self.on_library_weight_changed,
+        chips = ttk.Frame(filters)
+        chips.grid(row=1, column=0, columnspan=2, sticky="w")
+        for idx, label in enumerate(LIBRARY_USAGE_PRESET_TOKENS.keys()):
+            btn = tk.Button(
+                chips,
+                text=label,
+                relief="flat",
+                bd=1,
+                padx=10,
+                pady=4,
+                bg=self.colors["button"],
+                fg=self.colors["text"],
+                activebackground=self.colors["button_hover"],
+                activeforeground=self.colors["text"],
+                highlightthickness=1,
+                highlightbackground=self.colors["border"],
+                highlightcolor=self.colors["accent"],
+                command=lambda key=label: self.on_library_usage_preset_clicked(key),
             )
-            scale.grid(row=0, column=idx, sticky="ew", padx=(0 if idx == 0 else 6, 0))
+            btn.grid(row=0, column=idx, padx=(0, 6), pady=2, sticky="w")
+            self._library_usage_buttons[label] = btn
+        ttk.Label(
+            filters,
+            text="Click a preset to filter. Use All for the complete list.",
+            style="Muted.TLabel",
+        ).grid(row=2, column=0, columnspan=2, sticky="w", pady=(6, 0))
+        ttk.Label(filters, textvariable=self.library_count_var, style="Muted.TLabel").grid(
+            row=3, column=0, columnspan=2, sticky="w", pady=(4, 0)
+        )
+        self._refresh_library_usage_preset_buttons()
+        self._refresh_usage_filter_hint()
+
+        radar = ttk.LabelFrame(outer, text="Radar Selection", padding=8)
+        radar.pack(fill="x", pady=(8, 0))
+        self.library_radar_canvas = tk.Canvas(
+            radar,
+            width=980,
+            height=500,
+            bg=self.colors["entry"],
+            highlightthickness=1,
+            highlightbackground=self.colors["border"],
+            highlightcolor=self.colors["accent"],
+        )
+        self.library_radar_canvas.pack(fill="x")
+        self.library_radar_canvas.bind("<Button-1>", self.on_library_radar_click)
+        ttk.Label(radar, textvariable=self.library_radar_hint_var, style="Muted.TLabel").pack(anchor="w", pady=(6, 0))
 
         results = ttk.LabelFrame(outer, text="Profiles", padding=8)
         results.pack(fill="both", expand=True, pady=(8, 0))
         self.library_results_listbox = tk.Listbox(
             results,
             activestyle="none",
+            font=("Segoe UI", 11),
             bg=self.colors["entry"],
             fg=self.colors["text"],
             selectbackground=self.colors["selection"],
@@ -922,6 +940,7 @@ class App:
             highlightcolor=self.colors["accent"],
         )
         self.library_results_listbox.pack(side="left", fill="both", expand=True)
+        self.library_results_listbox.bind("<<ListboxSelect>>", self.on_library_listbox_select)
         self.library_results_listbox.bind("<Double-Button-1>", self.apply_selected_library_profile)
 
         yscroll = ttk.Scrollbar(results, orient="vertical", command=self.library_results_listbox.yview)
@@ -939,23 +958,29 @@ class App:
         if self.library_browser_window is None or self.library_results_listbox is None:
             return
         try:
-            display_values = self._build_library_browser_rows()
+            if self._library_total_rated_count is None:
+                self._library_total_rated_count = len(self._airfoil_db.list_profiles_with_ratings(limit=3000))
+            rows = self._build_library_browser_rows()
         except Exception as exc:
             self._library_load_error = str(exc)
-            display_values = []
-        lb = self.library_results_listbox
-        lb.delete(0, "end")
-        for item in display_values:
-            lb.insert("end", item)
+            rows = []
+        total = int(self._library_total_rated_count or 0)
+        self.library_count_var.set(f"Profiles shown: {len(rows)} / {total}")
+        self._populate_library_results_list(rows)
+        self._refresh_library_radar()
         current_name = self._get_selected_library_profile_name()
         if current_name:
-            for idx, text in enumerate(display_values):
+            values = list(self.library_results_listbox.get(0, "end"))
+            for idx, text in enumerate(values):
                 if self._library_display_to_name.get(text, "") == current_name:
-                    lb.selection_set(idx)
-                    lb.see(idx)
+                    self.library_results_listbox.selection_set(idx)
+                    self.library_results_listbox.see(idx)
                     break
 
     def apply_selected_library_profile(self, _event=None):
+        self.preview_selected_library_profile()
+
+    def preview_selected_library_profile(self, _event=None):
         if self.library_results_listbox is None:
             return
         selected_idx = self.library_results_listbox.curselection()
@@ -965,12 +990,20 @@ class App:
         name = self._library_display_to_name.get(label, "")
         if not name:
             return
+        self.preview_library_profile_name(name)
+
+    def preview_library_profile_name(self, name):
+        if not name:
+            return
         values = list(self.library_profile_combo.cget("values"))
         if name not in values:
             values.append(name)
             self.library_profile_combo["values"] = values
         self.library_profile_var.set(name)
         self.schedule_update()
+
+    def on_library_listbox_select(self, _event=None):
+        self.preview_selected_library_profile()
 
     def build_compact_layout(self):
         shell = ttk.Frame(self.root, padding=0)
@@ -1036,13 +1069,11 @@ class App:
         self.source_kind_var = tk.StringVar(value="NACA")
         self.library_profile_var = tk.StringVar(value="")
         self.library_search_var = tk.StringVar(value="")
-        self.library_usage_filter_var = tk.StringVar(value="")
-        self.library_sort_var = tk.StringVar(value="Name")
-        self.library_top_n_var = tk.StringVar(value="60")
-        self.rank_perf_var = tk.DoubleVar(value=1.0)
-        self.rank_doc_var = tk.DoubleVar(value=1.0)
-        self.rank_rob_var = tk.DoubleVar(value=1.0)
-        self.rank_conf_var = tk.DoubleVar(value=1.0)
+        self.library_usage_preset_var = tk.StringVar(value="All")
+        self._library_usage_buttons = {}
+        self._source_entry_buttons = {}
+        self.library_count_var = tk.StringVar(value="Profiles: -")
+        self.library_radar_hint_var = tk.StringVar(value="Click in the radar to focus matching profiles.")
         self.nd_re_limit_var = tk.StringVar(value=GUI_DEFAULTS.get("nd_re_extrapolation_limit", "3.0"))
         self.nd_alpha_steps_var = tk.StringVar(value=GUI_DEFAULTS.get("nd_alpha_steps_limit", "2.0"))
         self.chord_var = tk.StringVar(value=GUI_DEFAULTS["chord_mm"])
@@ -1064,6 +1095,10 @@ class App:
         self.advanced_curv_dir_combo = None
         self.library_browser_window = None
         self.library_results_listbox = None
+        self.library_radar_canvas = None
+        self._library_browser_rows = []
+        self._library_radar_points = []
+        self._library_total_rated_count = None
         # Advanced aerodynamic source toggle kept for future UI re-enable.
         # To restore it, add back the checkbox in the Aerodynamics panel and
         # switch `use_internal_library=True` in `compute_aero_results()` to this variable.
@@ -1110,15 +1145,48 @@ class App:
 
         row = 0
         ttk.Label(geom, text="Source", style="Panel.TLabel").grid(row=row, column=0, sticky="w", padx=(0, 4), pady=(1, 1))
-        self.source_combo = ttk.Combobox(
-            geom,
-            textvariable=self.source_kind_var,
-            values=["NACA", "Library"],
-            state="readonly",
-            width=12,
+        source_buttons = ttk.Frame(geom)
+        source_buttons.grid(row=row, column=1, sticky="ew", pady=(2, 0))
+        source_buttons.columnconfigure(0, weight=1)
+        source_buttons.columnconfigure(1, weight=1)
+        naca_btn = tk.Button(
+            source_buttons,
+            text="NACA",
+            relief="flat",
+            bd=1,
+            padx=8,
+            pady=3,
+            bg=self.colors["button"],
+            fg=self.colors["text"],
+            activebackground=self.colors["button_hover"],
+            activeforeground=self.colors["text"],
+            highlightthickness=1,
+            highlightbackground=self.colors["border"],
+            highlightcolor=self.colors["accent"],
+            command=self.set_source_naca,
         )
-        self.source_combo.grid(row=row, column=1, sticky="ew", pady=(2, 0))
-        self.source_combo.bind("<<ComboboxSelected>>", self.on_source_changed)
+        naca_btn.grid(row=0, column=0, sticky="ew", padx=(0, 4))
+        library_btn = tk.Button(
+            source_buttons,
+            text="LIBRARY",
+            relief="flat",
+            bd=1,
+            padx=8,
+            pady=3,
+            bg=self.colors["button"],
+            fg=self.colors["text"],
+            activebackground=self.colors["button_hover"],
+            activeforeground=self.colors["text"],
+            highlightthickness=1,
+            highlightbackground=self.colors["border"],
+            highlightcolor=self.colors["accent"],
+            command=self.set_source_library,
+        )
+        library_btn.grid(row=0, column=1, sticky="ew")
+        self._source_entry_buttons = {
+            "naca": naca_btn,
+            "library": library_btn,
+        }
         ttk.Label(geom, text="Library profile", style="Panel.TLabel").grid(row=row, column=2, sticky="w", padx=(8, 4), pady=(1, 1))
         self.library_profile_combo = ttk.Combobox(
             geom,
@@ -1128,10 +1196,6 @@ class App:
         )
         self.library_profile_combo.grid(row=row, column=3, sticky="ew", pady=(2, 0))
         self.library_profile_combo.bind("<<ComboboxSelected>>", self.schedule_update)
-
-        row += 1
-        self.library_browse_button = ttk.Button(geom, text="Browse Library...", command=self.open_library_browser)
-        self.library_browse_button.grid(row=row, column=2, columnspan=2, sticky="ew", pady=(2, 0))
 
         row += 1
         ttk.Label(geom, text="NACA profile", style="Panel.TLabel").grid(row=row, column=0, sticky="w", padx=(0, 4), pady=(1, 1))
@@ -1807,6 +1871,41 @@ class App:
         self.update_source_fields()
         self.update_preview()
 
+    def set_source_naca(self):
+        if self.source_internal_value() != "naca":
+            self.source_kind_var.set("NACA")
+        self.on_source_changed()
+
+    def set_source_library(self):
+        if self.source_internal_value() != "library":
+            self.source_kind_var.set("Library")
+        self.on_source_changed()
+        self.open_library_browser()
+
+    def _refresh_source_entry_buttons(self):
+        if not self._source_entry_buttons:
+            return
+        active = self.source_internal_value()
+        for key, btn in self._source_entry_buttons.items():
+            if key == active:
+                btn.configure(
+                    bg=self.colors["accent"],
+                    fg=self.colors["button_text_active"],
+                    activebackground=self.colors["accent_alt"],
+                    activeforeground=self.colors["button_text_active"],
+                    highlightbackground=self.colors["accent"],
+                    highlightcolor=self.colors["accent"],
+                )
+            else:
+                btn.configure(
+                    bg=self.colors["button"],
+                    fg=self.colors["text"],
+                    activebackground=self.colors["button_hover"],
+                    activeforeground=self.colors["text"],
+                    highlightbackground=self.colors["border"],
+                    highlightcolor=self.colors["accent"],
+                )
+
     def update_mode_fields(self):
         is_curved = self.mode_internal_value() == "curved"
         state = "normal" if is_curved else "disabled"
@@ -1845,86 +1944,250 @@ class App:
         self._library_display_to_name = {}
 
     def _build_library_browser_rows(self):
+        active_key = self.library_usage_preset_var.get().strip() or "All"
+        filter_token = LIBRARY_USAGE_PRESET_TOKENS.get(active_key, None)
+        if filter_token == "":
+            filter_token = None
         rows = self._airfoil_db.list_profiles_with_ratings(
             search=self.library_search_var.get().strip() or None,
-            usage_filter=self.library_usage_filter_var.get().strip() or None,
+            profile_type_filter=filter_token,
             limit=3000,
         )
-        sort_mode = self.library_sort_var.get().strip().lower()
-        wp = max(float(self.rank_perf_var.get()), 0.0)
-        wd = max(float(self.rank_doc_var.get()), 0.0)
-        wr = max(float(self.rank_rob_var.get()), 0.0)
-        wc = max(float(self.rank_conf_var.get()), 0.0)
-        wsum = max(wp + wd + wr + wc, 1e-9)
-        wp, wd, wr, wc = wp / wsum, wd / wsum, wr / wsum, wc / wsum
+        rows.sort(key=lambda item: (item.get("name") or "").lower())
+        self._library_browser_rows = rows
+        return rows
 
-        weighted_score = {}
-        for item in rows:
-            name = item.get("name") or ""
-            weighted_score[name] = (
-                wp * float(item.get("performance_score") or 0.0)
-                + wd * float(item.get("docility_score") or 0.0)
-                + wr * float(item.get("robustness_score") or 0.0)
-                + wc * float(item.get("confidence_score") or 0.0)
-            )
+    def _refresh_library_usage_preset_buttons(self):
+        active_key = self.library_usage_preset_var.get().strip()
+        for key, btn in self._library_usage_buttons.items():
+            is_active = key == active_key
+            if is_active:
+                btn.configure(
+                    bg=self.colors["accent"],
+                    fg=self.colors["button_text_active"],
+                    highlightbackground=self.colors["accent"],
+                )
+            else:
+                btn.configure(
+                    bg=self.colors["button"],
+                    fg=self.colors["text"],
+                    highlightbackground=self.colors["border"],
+                )
 
-        if sort_mode == "performance":
-            rows.sort(key=lambda item: float(item.get("performance_score") or -1e9), reverse=True)
-        elif sort_mode == "docility":
-            rows.sort(key=lambda item: float(item.get("docility_score") or -1e9), reverse=True)
-        elif sort_mode == "robustness":
-            rows.sort(key=lambda item: float(item.get("robustness_score") or -1e9), reverse=True)
-        elif sort_mode == "confidence":
-            rows.sort(key=lambda item: float(item.get("confidence_score") or -1e9), reverse=True)
-        elif sort_mode == "weighted":
-            rows.sort(
-                key=lambda item: (
-                    weighted_score.get(item.get("name") or "", 0.0),
-                    float(item.get("confidence_score") or 0.0),
-                    item.get("name") or "",
-                ),
-                reverse=True,
-            )
+    def _refresh_usage_filter_hint(self):
+        active_key = self.library_usage_preset_var.get().strip()
+        if active_key and active_key != "All":
+            self.library_radar_hint_var.set(f"Active filter: {active_key}.")
         else:
-            rows.sort(key=lambda item: (item.get("name") or "").lower())
+            self.library_radar_hint_var.set("Click in the radar to focus matching profiles.")
 
-        top_n = int(max(1, min(500, self._parse_float_or_default(self.library_top_n_var.get(), 60))))
-        self.library_top_n_var.set(str(top_n))
-        rows = rows[:top_n]
-        display_values = []
+    def on_library_usage_preset_clicked(self, key):
+        self.library_usage_preset_var.set(key or "All")
+        self._refresh_library_usage_preset_buttons()
+        self._refresh_usage_filter_hint()
+        self.refresh_library_browser_results()
+
+    def _library_row_label(self, item, distance_by_name=None):
+        name = item.get("name") or ""
+        usage = (item.get("top_usage") or "-").strip()
+        aircraft = (item.get("top_aircraft") or "").strip()
+        usage_text = usage
+        if aircraft:
+            usage_text = f"{usage} @ {aircraft}"
+        perf = float(item.get("performance_score") or 0.0)
+        doc = float(item.get("docility_score") or 0.0)
+        rob = float(item.get("robustness_score") or 0.0)
+        conf = float(item.get("confidence_score") or 0.0)
+        vers = float(item.get("versatility_score") or 0.0)
+        label = (
+            f"{name} | P={perf:.1f} D={doc:.1f} R={rob:.1f} C={conf:.1f} V={vers:.1f} | use={usage_text}"
+        )
+        if distance_by_name is not None:
+            label = f"{label} | d={float(distance_by_name.get(name, 0.0)):.1f}"
+        return label
+
+    def _populate_library_results_list(self, rows, distance_by_name=None):
+        lb = self.library_results_listbox
+        if lb is None:
+            return
+        lb.delete(0, "end")
         self._library_display_to_name = {}
         for item in rows:
             name = item.get("name") or ""
             if not name:
                 continue
-            usage = (item.get("top_usage") or "-").strip()
-            if sort_mode == "performance":
-                score_val = float(item.get("performance_score") or 0.0)
-            elif sort_mode == "docility":
-                score_val = float(item.get("docility_score") or 0.0)
-            elif sort_mode == "robustness":
-                score_val = float(item.get("robustness_score") or 0.0)
-            elif sort_mode == "confidence":
-                score_val = float(item.get("confidence_score") or 0.0)
-            else:
-                score_val = weighted_score.get(name, 0.0)
-            label = f"{name} | S={score_val:.3f} | use={usage}"
-            display_values.append(label)
+            label = self._library_row_label(item, distance_by_name=distance_by_name)
+            lb.insert("end", label)
             self._library_display_to_name[label] = name
-        return display_values
+
+    def _refresh_library_radar(self):
+        cv = self.library_radar_canvas
+        if cv is None:
+            return
+        cv.delete("all")
+        width = max(int(cv.winfo_width()), int(cv.cget("width")))
+        height = max(int(cv.winfo_height()), int(cv.cget("height")))
+        cx = width * 0.5
+        cy = height * 0.54
+        radius = min(width, height) * 0.43
+        axis_names = ["Performance", "Docility", "Robustness", "Confidence", "Versatility"]
+        axis_angles = [math.radians(-90 + idx * 72) for idx in range(5)]
+
+        def _shadow_text(x, y, text, *, anchor="center", font=("Segoe UI", 10, "bold")):
+            cv.create_text(
+                x + 1,
+                y + 1,
+                text=text,
+                fill=self.colors["bg"],
+                anchor=anchor,
+                font=font,
+            )
+            cv.create_text(
+                x,
+                y,
+                text=text,
+                fill=self.colors["muted"],
+                anchor=anchor,
+                font=font,
+            )
+
+        _shadow_text(
+            18,
+            20,
+            "AIRFOIL CAPABILITY RADAR",
+            anchor="w",
+            font=("Segoe UI", 13, "bold"),
+        )
+        _shadow_text(
+            18,
+            40,
+            "Normalized to the current filtered profile set",
+            anchor="w",
+            font=("Segoe UI", 11),
+        )
+
+        for ring in (0.2, 0.4, 0.6, 0.8, 1.0):
+            points = []
+            for angle in axis_angles:
+                points.extend([cx + radius * ring * math.cos(angle), cy + radius * ring * math.sin(angle)])
+            cv.create_polygon(
+                points,
+                outline=self.colors["border"],
+                fill="",
+                width=1,
+            )
+            cv.create_polygon(
+                [points[idx] + (1 if idx % 2 == 0 else 1) for idx in range(len(points))],
+                outline=self.colors["grid"],
+                fill="",
+                width=1,
+            )
+        for axis_name, angle in zip(axis_names, axis_angles):
+            ax = cx + radius * math.cos(angle)
+            ay = cy + radius * math.sin(angle)
+            lx = cx + radius * 1.13 * math.cos(angle)
+            ly = cy + radius * 1.13 * math.sin(angle)
+            cv.create_line(cx + 1, cy + 1, ax + 1, ay + 1, fill=self.colors["bg"], width=1)
+            cv.create_line(cx, cy, ax, ay, fill=self.colors["grid"], width=1)
+            _shadow_text(lx, ly, axis_name, font=("Segoe UI", 11, "bold"))
+
+        value_keys = [
+            "performance_score",
+            "docility_score",
+            "robustness_score",
+            "confidence_score",
+            "versatility_score",
+        ]
+        axis_mins = []
+        axis_maxs = []
+        for key in value_keys:
+            vals = [float(row.get(key) or 0.0) for row in self._library_browser_rows]
+            if vals:
+                axis_mins.append(min(vals))
+                axis_maxs.append(max(vals))
+            else:
+                axis_mins.append(0.0)
+                axis_maxs.append(100.0)
+
+        vectors = []
+        for row in self._library_browser_rows:
+            norm_values = []
+            for idx, key in enumerate(value_keys):
+                raw = float(row.get(key) or 0.0)
+                low = axis_mins[idx]
+                high = axis_maxs[idx]
+                span = max(high - low, 1e-9)
+                norm_values.append((raw - low) / span)
+            vx = 0.0
+            vy = 0.0
+            for val, angle in zip(norm_values, axis_angles):
+                vx += val * math.cos(angle)
+                vy += val * math.sin(angle)
+            vectors.append((row, vx / 5.0, vy / 5.0))
+
+        max_abs_x = max((abs(vx) for _, vx, _ in vectors), default=1.0)
+        max_abs_y = max((abs(vy) for _, _, vy in vectors), default=1.0)
+        max_abs_x = max(max_abs_x, 1e-9)
+        max_abs_y = max(max_abs_y, 1e-9)
+
+        self._library_radar_points = []
+        point_radius = 3 if len(vectors) <= 300 else 2
+        for row, vx, vy in vectors:
+            name = row.get("name") or ""
+            if not name:
+                continue
+            px = cx + radius * 0.96 * (vx / max_abs_x)
+            py = cy + radius * 0.96 * (vy / max_abs_y)
+            self._library_radar_points.append((name, px, py, row))
+            cv.create_oval(
+                px - point_radius + 1,
+                py - point_radius + 1,
+                px + point_radius + 1,
+                py + point_radius + 1,
+                fill=self.colors["bg"],
+                outline="",
+            )
+            cv.create_oval(
+                px - point_radius,
+                py - point_radius,
+                px + point_radius,
+                py + point_radius,
+                fill=self.colors["accent"],
+                outline=self.colors["hero_accent"],
+            )
+
+    def on_library_radar_click(self, event):
+        if not self._library_radar_points:
+            return
+        ex = float(event.x)
+        ey = float(event.y)
+        ranked = []
+        distance_by_name = {}
+        for name, px, py, row in self._library_radar_points:
+            dist = math.hypot(px - ex, py - ey)
+            ranked.append((dist, row))
+            distance_by_name[name] = dist
+        ranked.sort(key=lambda item: item[0])
+        ranked_rows = [row for _, row in ranked]
+        self._populate_library_results_list(ranked_rows, distance_by_name=distance_by_name)
+        if self.library_results_listbox is not None and ranked_rows:
+            self.library_results_listbox.selection_clear(0, "end")
+            self.library_results_listbox.selection_set(0)
+            self.library_results_listbox.activate(0)
+            self.library_results_listbox.see(0)
+            top_name = ranked_rows[0].get("name") or ""
+            self.preview_library_profile_name(top_name)
+        active_key = self.library_usage_preset_var.get().strip()
+        filter_note = f" | filter={active_key}" if active_key and active_key != "All" else ""
+        self.library_radar_hint_var.set(
+            f"Radar focus at x={int(ex)}, y={int(ey)}. Previewing nearest profile{filter_note}."
+        )
 
     def _get_selected_library_profile_name(self):
         selected = self.library_profile_var.get().strip()
         if not selected:
             return ""
         return self._library_display_to_name.get(selected, selected)
-
-    def on_library_filter_changed(self, _event=None):
-        self.refresh_library_browser_results()
-
-    def on_library_weight_changed(self, _value=None):
-        if self.library_sort_var.get().strip().lower() == "weighted":
-            self.refresh_library_browser_results()
 
     def on_nd_limits_changed(self, _event=None):
         self.update_nd_limits_from_vars()
@@ -1942,6 +2205,7 @@ class App:
 
     def update_source_fields(self):
         is_naca = self.source_internal_value() == "naca"
+        self._refresh_source_entry_buttons()
         naca_state = "normal" if is_naca else "disabled"
         naca_slider_state = "normal" if is_naca else "disabled"
         self.code_entry.config(state=naca_state)
@@ -1960,7 +2224,6 @@ class App:
                 pass
         self.update_mode_fields()
         self.library_profile_combo.config(state="readonly" if not is_naca else "disabled")
-        self.library_browse_button.config(state="normal" if not is_naca else "disabled")
 
     def build_library_airfoil_xy(self, vals):
         np_mod = ensure_numpy()
@@ -3395,6 +3658,12 @@ def main():
     if exit_code is None:
         if not ensure_required_deps():
             return
+        ensure_runtime_assets(
+            include_airfoil_db=True,
+            include_xfoil=False,
+            assume_yes=False,
+            refresh_airfoil_db=False,
+        )
         root = tk.Tk()
         try:
             style = ttk.Style()

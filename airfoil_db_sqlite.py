@@ -69,6 +69,10 @@ class AirfoilDb:
         con.row_factory = sqlite3.Row
         return con
 
+    def _table_columns(self, con: sqlite3.Connection, table_name: str) -> set[str]:
+        rows = con.execute(f"PRAGMA table_info({table_name})").fetchall()
+        return {str(row["name"]) for row in rows}
+
     def list_profiles(
         self,
         *,
@@ -119,6 +123,7 @@ class AirfoilDb:
         only_xfoil_compatible: bool = False,
         search: str | None = None,
         usage_filter: str | None = None,
+        profile_type_filter: str | None = None,
         limit: int | None = None,
     ) -> list[dict[str, Any]]:
         where_parts: list[str] = []
@@ -144,37 +149,60 @@ class AirfoilDb:
             )
             u = f"%{usage_filter.strip()}%"
             params.extend([u, u, u])
+        if profile_type_filter:
+            where_parts.append(
+                "EXISTS ("
+                "SELECT 1 FROM airfoil_applications ap "
+                "WHERE ap.matched_profile_name = a.name "
+                "AND ("
+                "LOWER(COALESCE(ap.profile_type_tag, '')) LIKE ? "
+                "OR LOWER(COALESCE(ap.reason_tag, '')) LIKE ? "
+                "OR LOWER(COALESCE(ap.role_label, '')) LIKE ? "
+                "OR LOWER(COALESCE(ap.aircraft_section, '')) LIKE ?"
+                ")"
+                ")"
+            )
+            token = f"%{profile_type_filter.strip().lower()}%"
+            params.extend([token, token, token, token])
 
         where_sql = f"WHERE {' AND '.join(where_parts)}" if where_parts else ""
         limit_sql = " LIMIT ?" if limit is not None and limit > 0 else ""
         if limit_sql:
             params.append(limit)
 
-        query = (
-            "SELECT "
-            "a.name, a.title, a.family, a.source, a.source_url, a.n_points, "
-            "a.max_thickness, a.max_thickness_x, a.max_camber, a.max_camber_x, "
-            "a.is_valid_geometry, a.is_xfoil_compatible, a.exclude_from_final, "
-            "ar.performance_score, ar.docility_score, ar.robustness_score, ar.confidence_score, "
-            "ar.rating_version, ar.rating_notes, "
-            "("
-            "SELECT ap.role_label FROM airfoil_applications ap "
-            "WHERE ap.matched_profile_name = a.name AND ap.role_label IS NOT NULL "
-            "ORDER BY COALESCE(ap.confidence, 0) DESC, ap.id DESC LIMIT 1"
-            ") AS top_usage "
-            "FROM airfoils a "
-            "LEFT JOIN airfoil_ratings ar "
-            "ON ar.id = ("
-            "SELECT ar2.id FROM airfoil_ratings ar2 "
-            "WHERE ar2.airfoil_name = a.name "
-            "ORDER BY ar2.id DESC LIMIT 1"
-            ") "
-            f"{where_sql} "
-            "ORDER BY a.name ASC"
-            f"{limit_sql}"
-        )
-
         with self._connect() as con:
+            rating_cols = self._table_columns(con, "airfoil_ratings")
+            versatility_expr = "ar.versatility_score" if "versatility_score" in rating_cols else "0.0"
+            query = (
+                "SELECT "
+                "a.name, a.title, a.family, a.source, a.source_url, a.n_points, "
+                "a.max_thickness, a.max_thickness_x, a.max_camber, a.max_camber_x, "
+                "a.is_valid_geometry, a.is_xfoil_compatible, a.exclude_from_final, "
+                "ar.performance_score, ar.docility_score, ar.robustness_score, ar.confidence_score, "
+                f"{versatility_expr} AS versatility_score, "
+                "ar.rating_version, ar.rating_notes, "
+                "("
+                "SELECT ap.role_label FROM airfoil_applications ap "
+                "WHERE ap.matched_profile_name = a.name AND ap.role_label IS NOT NULL "
+                "ORDER BY COALESCE(ap.confidence, 0) DESC, ap.id DESC LIMIT 1"
+                ") AS top_usage, "
+                "("
+                "SELECT ap.aircraft_name FROM airfoil_applications ap "
+                "WHERE ap.matched_profile_name = a.name AND ap.aircraft_name IS NOT NULL "
+                "AND TRIM(ap.aircraft_name) <> '' "
+                "ORDER BY COALESCE(ap.confidence, 0) DESC, ap.id DESC LIMIT 1"
+                ") AS top_aircraft "
+                "FROM airfoils a "
+                "LEFT JOIN airfoil_ratings ar "
+                "ON ar.id = ("
+                "SELECT ar2.id FROM airfoil_ratings ar2 "
+                "WHERE ar2.airfoil_name = a.name "
+                "ORDER BY ar2.id DESC LIMIT 1"
+                ") "
+                f"{where_sql} "
+                "ORDER BY a.name ASC"
+                f"{limit_sql}"
+            )
             rows = con.execute(query, params).fetchall()
         return [dict(row) for row in rows]
 
