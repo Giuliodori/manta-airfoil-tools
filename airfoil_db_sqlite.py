@@ -77,6 +77,13 @@ class AirfoilDb:
         rows = con.execute(f"PRAGMA table_info({table_name})").fetchall()
         return {str(row["name"]) for row in rows}
 
+    def _table_exists(self, con: sqlite3.Connection, table_name: str) -> bool:
+        row = con.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name=? LIMIT 1",
+            [table_name],
+        ).fetchone()
+        return row is not None
+
     def list_profiles(
         self,
         *,
@@ -159,15 +166,16 @@ class AirfoilDb:
                 "SELECT 1 FROM airfoil_applications ap "
                 "WHERE ap.matched_profile_name = a.name "
                 "AND ("
-                "LOWER(COALESCE(ap.profile_type_tag, '')) LIKE ? "
-                "OR LOWER(COALESCE(ap.reason_tag, '')) LIKE ? "
+                "COALESCE(ap.profile_type_tag, '') = ? COLLATE NOCASE "
+                "OR COALESCE(ap.reason_tag, '') = ? COLLATE NOCASE "
                 "OR LOWER(COALESCE(ap.role_label, '')) LIKE ? "
                 "OR LOWER(COALESCE(ap.aircraft_section, '')) LIKE ?"
                 ")"
                 ")"
             )
-            token = f"%{profile_type_filter.strip().lower()}%"
-            params.extend([token, token, token, token])
+            exact = profile_type_filter.strip()
+            token = f"%{exact.lower()}%"
+            params.extend([exact, exact, token, token])
 
         where_sql = f"WHERE {' AND '.join(where_parts)}" if where_parts else ""
         limit_sql = " LIMIT ?" if limit is not None and limit > 0 else ""
@@ -177,7 +185,61 @@ class AirfoilDb:
         with self._connect() as con:
             rating_cols = self._table_columns(con, "airfoil_ratings")
             versatility_expr = "ar.versatility_score" if "versatility_score" in rating_cols else "0.0"
+            has_usage_summary = self._table_exists(con, "airfoil_usage_summary")
+
+            if has_usage_summary:
+                usage_join_sql = "LEFT JOIN airfoil_usage_summary aus ON aus.airfoil_name = a.name "
+                top_usage_expr = "aus.top_usage"
+                top_aircraft_expr = "aus.top_aircraft"
+                top_usages_expr = "aus.top_usages"
+                usage_count_expr = "aus.usage_count"
+            else:
+                usage_join_sql = ""
+                top_usage_expr = (
+                    "("
+                    "SELECT ap.role_label FROM airfoil_applications ap "
+                    "WHERE ap.matched_profile_name = a.name AND ap.role_label IS NOT NULL "
+                    "ORDER BY COALESCE(ap.confidence, 0) DESC, ap.id DESC LIMIT 1"
+                    ")"
+                )
+                top_aircraft_expr = (
+                    "("
+                    "SELECT ap.aircraft_name FROM airfoil_applications ap "
+                    "WHERE ap.matched_profile_name = a.name AND ap.aircraft_name IS NOT NULL "
+                    "AND TRIM(ap.aircraft_name) <> '' "
+                    "ORDER BY COALESCE(ap.confidence, 0) DESC, ap.id DESC LIMIT 1"
+                    ")"
+                )
+                top_usages_expr = (
+                    "("
+                    "SELECT GROUP_CONCAT(item, ' | ') FROM ("
+                    "SELECT CASE "
+                    "WHEN ap.aircraft_name IS NOT NULL AND TRIM(ap.aircraft_name) <> '' "
+                    "THEN TRIM(ap.role_label) || ' @ ' || TRIM(ap.aircraft_name) "
+                    "ELSE TRIM(ap.role_label) END AS item "
+                    "FROM airfoil_applications ap "
+                    "WHERE ap.matched_profile_name = a.name "
+                    "AND ap.role_label IS NOT NULL AND TRIM(ap.role_label) <> '' "
+                    "ORDER BY COALESCE(ap.confidence, 0) DESC, ap.id DESC "
+                    "LIMIT 3"
+                    ")"
+                    ")"
+                )
+                usage_count_expr = (
+                    "("
+                    "SELECT COUNT(*) FROM airfoil_applications ap "
+                    "WHERE ap.matched_profile_name = a.name"
+                    ")"
+                )
+
             query = (
+                "WITH latest_ratings AS ("
+                "SELECT r.* FROM airfoil_ratings r "
+                "JOIN ("
+                "SELECT airfoil_name, MAX(id) AS max_id "
+                "FROM airfoil_ratings GROUP BY airfoil_name"
+                ") x ON x.max_id = r.id"
+                ") "
                 "SELECT "
                 "a.name, a.title, a.family, a.source, a.source_url, a.n_points, "
                 "a.max_thickness, a.max_thickness_x, a.max_camber, a.max_camber_x, "
@@ -185,24 +247,13 @@ class AirfoilDb:
                 "ar.performance_score, ar.docility_score, ar.robustness_score, ar.confidence_score, "
                 f"{versatility_expr} AS versatility_score, "
                 "ar.rating_version, ar.rating_notes, "
-                "("
-                "SELECT ap.role_label FROM airfoil_applications ap "
-                "WHERE ap.matched_profile_name = a.name AND ap.role_label IS NOT NULL "
-                "ORDER BY COALESCE(ap.confidence, 0) DESC, ap.id DESC LIMIT 1"
-                ") AS top_usage, "
-                "("
-                "SELECT ap.aircraft_name FROM airfoil_applications ap "
-                "WHERE ap.matched_profile_name = a.name AND ap.aircraft_name IS NOT NULL "
-                "AND TRIM(ap.aircraft_name) <> '' "
-                "ORDER BY COALESCE(ap.confidence, 0) DESC, ap.id DESC LIMIT 1"
-                ") AS top_aircraft "
+                f"{top_usage_expr} AS top_usage, "
+                f"{top_aircraft_expr} AS top_aircraft, "
+                f"{top_usages_expr} AS top_usages, "
+                f"{usage_count_expr} AS usage_count "
                 "FROM airfoils a "
-                "LEFT JOIN airfoil_ratings ar "
-                "ON ar.id = ("
-                "SELECT ar2.id FROM airfoil_ratings ar2 "
-                "WHERE ar2.airfoil_name = a.name "
-                "ORDER BY ar2.id DESC LIMIT 1"
-                ") "
+                "LEFT JOIN latest_ratings ar ON ar.airfoil_name = a.name "
+                f"{usage_join_sql}"
                 f"{where_sql} "
                 "ORDER BY a.name ASC"
                 f"{limit_sql}"

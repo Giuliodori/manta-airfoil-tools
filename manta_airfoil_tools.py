@@ -141,7 +141,7 @@ THEME_OPTION_LABELS = tuple(THEME_LABEL_TO_KEY.keys())
 LIBRARY_USAGE_PRESET_TOKENS = {
     "All": "",
     "Symmetric": "symmetric",
-    "Autostable": "stability_trim",
+    "Autostable": "cambered_aft",
     "Rotating": "rotor_efficiency",
     "High Lift": "high_lift",
     "General Purpose": "general_purpose",
@@ -212,6 +212,7 @@ class App:
         self.configure_initial_window_size()
 
         self._update_job = None
+        self._library_browser_refresh_job = None
         self._syncing_code = False
         self._airfoil_db = AirfoilDb()
         self._library_profiles = []
@@ -1218,6 +1219,9 @@ class App:
                 self.library_radar_canvas = None
                 self._library_radar_points = []
                 self._library_usage_buttons = {}
+                if self._library_browser_refresh_job is not None:
+                    self.root.after_cancel(self._library_browser_refresh_job)
+                    self._library_browser_refresh_job = None
 
         win.protocol("WM_DELETE_WINDOW", _close)
 
@@ -1243,16 +1247,23 @@ class App:
 
         filters = ttk.LabelFrame(outer, text="Usage Presets", padding=8)
         filters.pack(fill="x")
-        ttk.Label(filters, text="Search profile", style="Panel.TLabel").grid(
+        ttk.Label(filters, text="Search / Filter profile", style="Panel.TLabel").grid(
             row=0, column=0, sticky="w", pady=(0, 4)
         )
         search_entry = ttk.Entry(filters, textvariable=self.library_search_var, width=28)
         search_entry.grid(row=0, column=1, sticky="ew", padx=(8, 0), pady=(0, 4))
-        search_entry.bind("<KeyRelease>", lambda _event: self.refresh_library_browser_results())
+        search_entry.bind("<KeyRelease>", lambda _event: self.schedule_library_browser_refresh())
+
+        ttk.Label(filters, text="Usage filter", style="Panel.TLabel").grid(
+            row=1, column=0, sticky="w", pady=(0, 4)
+        )
+        usage_search_entry = ttk.Entry(filters, textvariable=self.library_usage_search_var, width=28)
+        usage_search_entry.grid(row=1, column=1, sticky="ew", padx=(8, 0), pady=(0, 4))
+        usage_search_entry.bind("<KeyRelease>", lambda _event: self.schedule_library_browser_refresh())
         filters.columnconfigure(1, weight=1)
 
         chips = ttk.Frame(filters)
-        chips.grid(row=1, column=0, columnspan=2, sticky="w")
+        chips.grid(row=2, column=0, columnspan=2, sticky="w")
         for idx, label in enumerate(LIBRARY_USAGE_PRESET_TOKENS.keys()):
             btn = tk.Button(
                 chips,
@@ -1276,9 +1287,9 @@ class App:
             filters,
             text="Click a preset to filter. Use All for the complete list.",
             style="Muted.TLabel",
-        ).grid(row=2, column=0, columnspan=2, sticky="w", pady=(6, 0))
+        ).grid(row=3, column=0, columnspan=2, sticky="w", pady=(6, 0))
         ttk.Label(filters, textvariable=self.library_count_var, style="Muted.TLabel").grid(
-            row=3, column=0, columnspan=2, sticky="w", pady=(4, 0)
+            row=4, column=0, columnspan=2, sticky="w", pady=(4, 0)
         )
         self._refresh_library_usage_preset_buttons()
         self._refresh_usage_filter_hint()
@@ -1288,7 +1299,7 @@ class App:
         self.library_radar_canvas = tk.Canvas(
             radar,
             width=980,
-            height=500,
+            height=440,
             bg=self.colors["entry"],
             highlightthickness=1,
             highlightbackground=self.colors["border"],
@@ -1328,7 +1339,15 @@ class App:
 
         self.refresh_library_browser_results()
 
+    def schedule_library_browser_refresh(self, delay_ms=220):
+        if self.library_browser_window is None:
+            return
+        if self._library_browser_refresh_job is not None:
+            self.root.after_cancel(self._library_browser_refresh_job)
+        self._library_browser_refresh_job = self.root.after(delay_ms, self.refresh_library_browser_results)
+
     def refresh_library_browser_results(self):
+        self._library_browser_refresh_job = None
         if self.library_browser_window is None or self.library_results_listbox is None:
             return
         try:
@@ -1340,6 +1359,7 @@ class App:
             rows = []
         total = int(self._library_total_rated_count or 0)
         self.library_count_var.set(f"Profiles shown: {len(rows)} / {total}")
+        self._library_usage_overlay_cache.clear()
         self._populate_library_results_list(rows)
         self._refresh_library_radar()
         current_name = self._get_selected_library_profile_name()
@@ -1374,6 +1394,8 @@ class App:
             values.append(name)
             self.library_profile_combo["values"] = values
         self.library_profile_var.set(name)
+        if self.library_radar_canvas is not None:
+            self._refresh_library_radar()
         self.schedule_update()
 
     def on_library_listbox_select(self, _event=None):
@@ -1443,6 +1465,7 @@ class App:
         self.source_kind_var = tk.StringVar(value="NACA")
         self.library_profile_var = tk.StringVar(value="")
         self.library_search_var = tk.StringVar(value="")
+        self.library_usage_search_var = tk.StringVar(value="")
         self.library_usage_preset_var = tk.StringVar(value="All")
         self._library_usage_buttons = {}
         self._source_entry_buttons = {}
@@ -1473,6 +1496,7 @@ class App:
         self.library_radar_canvas = None
         self._library_browser_rows = []
         self._library_radar_points = []
+        self._library_usage_overlay_cache = {}
         self._library_total_rated_count = None
         self._naca_only_widgets = []
         self._naca_widget_grid = {}
@@ -2379,6 +2403,7 @@ class App:
             filter_token = None
         rows = self._airfoil_db.list_profiles_with_ratings(
             search=self.library_search_var.get().strip() or None,
+            usage_filter=self.library_usage_search_var.get().strip() or None,
             profile_type_filter=filter_token,
             limit=3000,
         )
@@ -2416,21 +2441,68 @@ class App:
         self._refresh_usage_filter_hint()
         self.refresh_library_browser_results()
 
+    @staticmethod
+    def _is_known_usage_text(text):
+        t = (text or "").strip().lower()
+        if not t or t in {"-", "unknown", "unknown role"}:
+            return False
+        if "unknown usage" in t:
+            return False
+        return True
+
+    def _library_usage_overlay_lines(self, profile_name, max_items=6):
+        name = (profile_name or "").strip()
+        if not name:
+            return []
+        cached = self._library_usage_overlay_cache.get(name)
+        if cached is not None:
+            return cached[: max(1, int(max_items))]
+
+        out = []
+        try:
+            rows = self._airfoil_db.list_profile_usage(name, limit=60)
+        except Exception:
+            rows = []
+        for row in rows:
+            role = (row.get("role_label") or "").strip()
+            if not self._is_known_usage_text(role):
+                continue
+            aircraft = (row.get("aircraft_name") or "").strip()
+            if self._is_known_usage_text(aircraft):
+                out.append(f"{role} @ {aircraft}")
+            else:
+                out.append(role)
+
+        unique = []
+        seen = set()
+        for line in out:
+            if line in seen:
+                continue
+            seen.add(line)
+            unique.append(line)
+        self._library_usage_overlay_cache[name] = unique
+        return unique[: max(1, int(max_items))]
+
     def _library_row_label(self, item, distance_by_name=None):
         name = item.get("name") or ""
         usage = (item.get("top_usage") or "-").strip()
         aircraft = (item.get("top_aircraft") or "").strip()
-        usage_text = usage
-        if aircraft:
-            usage_text = f"{usage} @ {aircraft}"
+        known_usage = self._is_known_usage_text(usage)
+        known_aircraft = self._is_known_usage_text(aircraft)
+        usage_count = int(item.get("usage_count") or 0)
         perf = float(item.get("performance_score") or 0.0)
         doc = float(item.get("docility_score") or 0.0)
         rob = float(item.get("robustness_score") or 0.0)
         conf = float(item.get("confidence_score") or 0.0)
         vers = float(item.get("versatility_score") or 0.0)
-        label = (
-            f"{name} | P={perf:.1f} D={doc:.1f} R={rob:.1f} C={conf:.1f} V={vers:.1f} | use={usage_text}"
-        )
+        label = f"{name} | P={perf:.1f} D={doc:.1f} R={rob:.1f} C={conf:.1f} V={vers:.1f}"
+        if known_usage:
+            if known_aircraft:
+                label = f"{label} | use={usage} @ {aircraft}"
+            else:
+                label = f"{label} | use={usage}"
+            if usage_count > 1:
+                label = f"{label} (+{usage_count - 1})"
         if distance_by_name is not None:
             label = f"{label} | d={float(distance_by_name.get(name, 0.0)):.1f}"
         return label
@@ -2585,6 +2657,31 @@ class App:
                 fill=self.colors["accent"],
                 outline=self.colors["hero_accent"],
             )
+
+        selected_name = self._get_selected_library_profile_name()
+        usage_lines = self._library_usage_overlay_lines(selected_name, max_items=8)
+        if usage_lines:
+            x = width - 16
+            y = 18
+            for idx, line in enumerate(usage_lines, start=1):
+                text = f"{idx}. {line}"
+                # Lightweight shadow to keep text readable over the radar grid.
+                cv.create_text(
+                    x + 1,
+                    y + 1 + 20 * (idx - 1),
+                    text=text,
+                    anchor="ne",
+                    fill=self.colors["bg"],
+                    font=("Segoe UI", 10),
+                )
+                cv.create_text(
+                    x,
+                    y + 20 * (idx - 1),
+                    text=text,
+                    anchor="ne",
+                    fill=self.colors["text"],
+                    font=("Segoe UI", 10),
+                )
 
     def on_library_radar_click(self, event):
         if not self._library_radar_points:
