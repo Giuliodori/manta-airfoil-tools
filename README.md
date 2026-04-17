@@ -77,6 +77,7 @@ For source-based setup and troubleshooting, use the dedicated guide:
 - Validation and benchmarks: [`docs/VALIDATION.md`](docs/VALIDATION.md)
 - CAD/export compatibility and workflow notes: [`docs/CAD_EXPORTS.md`](docs/CAD_EXPORTS.md)
 - NACA background and 4-digit primer: [`docs/NACA_PRIMER.md`](docs/NACA_PRIMER.md)
+- Ratings/filter formulas (DB reference): [`airfoil-db-maker/RATINGS_AND_FILTERS.md`](https://github.com/Giuliodori/airfoil-db-maker/blob/main/RATINGS_AND_FILTERS.md)
 - Positioning and differentiators: [`docs/key_advantages.md`](docs/key_advantages.md)
 - Attribution rules: [`docs/ATTRIBUTION.md`](docs/ATTRIBUTION.md)
 - Third-party notices: [`docs/THIRD_PARTY_NOTICES.md`](docs/THIRD_PARTY_NOTICES.md)

@@ -148,13 +148,36 @@ class AirfoilDb:
         only_xfoil_compatible: bool = False,
         search: str | None = None,
         usage_filter: str | None = None,
+        usage_filters: list[str] | None = None,
         profile_type_filter: str | None = None,
+        profile_type_filters: list[str] | None = None,
         autostable_min_score: float | None = None,
+        high_lift_min_score: float | None = None,
+        famous_min_score: float | None = None,
         limit: int | None = None,
     ) -> list[dict[str, Any]]:
         where_parts: list[str] = []
         params: list[Any] = []
-        profile_type_token = (profile_type_filter or "").strip()
+
+        usage_filter_tokens: list[str] = []
+        for raw_token in [usage_filter, *(usage_filters or [])]:
+            token = (raw_token or "").strip()
+            if token:
+                usage_filter_tokens.append(token)
+
+        profile_tokens_raw: list[str] = []
+        for raw_token in [profile_type_filter, *(profile_type_filters or [])]:
+            token = (raw_token or "").strip()
+            if token:
+                profile_tokens_raw.append(token)
+        seen_profile_tokens: set[str] = set()
+        profile_tokens: list[str] = []
+        for token in profile_tokens_raw:
+            key = token.lower()
+            if key in seen_profile_tokens:
+                continue
+            seen_profile_tokens.add(key)
+            profile_tokens.append(token)
 
         if not include_excluded:
             where_parts.append("COALESCE(a.exclude_from_final, 0) = 0")
@@ -166,7 +189,7 @@ class AirfoilDb:
             where_parts.append("(a.name LIKE ? OR a.title LIKE ? OR a.family LIKE ?)")
             token = f"%{search.strip()}%"
             params.extend([token, token, token])
-        if usage_filter:
+        for usage_token in usage_filter_tokens:
             where_parts.append(
                 "EXISTS ("
                 "SELECT 1 FROM airfoil_applications ap "
@@ -174,7 +197,7 @@ class AirfoilDb:
                 "AND (ap.role_label LIKE ? OR ap.aircraft_section LIKE ? OR ap.aircraft_name LIKE ?)"
                 ")"
             )
-            u = f"%{usage_filter.strip()}%"
+            u = f"%{usage_token}%"
             params.extend([u, u, u])
 
         with self._connect() as con:
@@ -190,6 +213,8 @@ class AirfoilDb:
                 top_usages_expr = "aus.top_usages"
                 usage_count_expr = "aus.usage_count"
                 autostable_score_expr = "aus.autostable_score"
+                high_lift_score_expr = "aus.high_lift_score"
+                famous_score_expr = "aus.famous_score"
             else:
                 usage_join_sql = ""
                 top_usage_expr = (
@@ -229,32 +254,89 @@ class AirfoilDb:
                     ")"
                 )
                 autostable_score_expr = "NULL"
+                high_lift_score_expr = "NULL"
+                famous_score_expr = "NULL"
 
-            if profile_type_token:
-                token_lower = profile_type_token.lower()
+            if (
+                high_lift_min_score is not None
+                and has_usage_summary
+                and "high_lift_score" in usage_summary_cols
+            ):
+                min_score = max(0.0, min(100.0, float(high_lift_min_score)))
+                where_parts.append("COALESCE(aus.high_lift_score, -1000.0) >= ?")
+                params.append(min_score)
+            if (
+                famous_min_score is not None
+                and has_usage_summary
+                and "famous_score" in usage_summary_cols
+            ):
+                min_score = max(0.0, min(100.0, float(famous_min_score)))
+                where_parts.append("COALESCE(aus.famous_score, -1000.0) >= ?")
+                params.append(min_score)
+
+            has_autostable_token = any(token.lower() == "autostable" for token in profile_tokens)
+            has_high_lift_token = any(token.lower() == "high_lift" for token in profile_tokens)
+            has_famous_token = any(token.lower() == "famous" for token in profile_tokens)
+            if (
+                has_autostable_token
+                and has_usage_summary
+                and "autostable_score" in usage_summary_cols
+            ):
+                min_score = float(autostable_min_score if autostable_min_score is not None else 20.0)
+                where_parts.append("COALESCE(aus.autostable_score, -1000.0) >= ?")
+                params.append(min_score)
+            if (
+                has_high_lift_token
+                and high_lift_min_score is None
+                and has_usage_summary
+                and "high_lift_score" in usage_summary_cols
+            ):
+                where_parts.append("COALESCE(aus.high_lift_score, -1000.0) >= ?")
+                params.append(0.0)
+            if (
+                has_famous_token
+                and famous_min_score is None
+                and has_usage_summary
+                and "famous_score" in usage_summary_cols
+            ):
+                where_parts.append("COALESCE(aus.famous_score, -1000.0) >= ?")
+                params.append(0.0)
+
+            for profile_token in profile_tokens:
+                token_lower = profile_token.lower()
                 if (
                     token_lower == "autostable"
                     and has_usage_summary
                     and "autostable_score" in usage_summary_cols
                 ):
-                    min_score = float(autostable_min_score if autostable_min_score is not None else 20.0)
-                    where_parts.append("COALESCE(aus.autostable_score, -1000.0) >= ?")
-                    params.append(min_score)
-                else:
-                    where_parts.append(
-                        "EXISTS ("
-                        "SELECT 1 FROM airfoil_applications ap "
-                        "WHERE ap.matched_profile_name = a.name "
-                        "AND ("
-                        "COALESCE(ap.profile_type_tag, '') = ? COLLATE NOCASE "
-                        "OR COALESCE(ap.reason_tag, '') = ? COLLATE NOCASE "
-                        "OR LOWER(COALESCE(ap.role_label, '')) LIKE ? "
-                        "OR LOWER(COALESCE(ap.aircraft_section, '')) LIKE ?"
-                        ")"
-                        ")"
-                    )
-                    like_token = f"%{token_lower}%"
-                    params.extend([profile_type_token, profile_type_token, like_token, like_token])
+                    continue
+                if (
+                    token_lower == "high_lift"
+                    and has_usage_summary
+                    and "high_lift_score" in usage_summary_cols
+                ):
+                    continue
+                if (
+                    token_lower == "famous"
+                    and has_usage_summary
+                    and "famous_score" in usage_summary_cols
+                ):
+                    continue
+
+                where_parts.append(
+                    "EXISTS ("
+                    "SELECT 1 FROM airfoil_applications ap "
+                    "WHERE ap.matched_profile_name = a.name "
+                    "AND ("
+                    "COALESCE(ap.profile_type_tag, '') = ? COLLATE NOCASE "
+                    "OR COALESCE(ap.reason_tag, '') = ? COLLATE NOCASE "
+                    "OR LOWER(COALESCE(ap.role_label, '')) LIKE ? "
+                    "OR LOWER(COALESCE(ap.aircraft_section, '')) LIKE ?"
+                    ")"
+                    ")"
+                )
+                like_token = f"%{token_lower}%"
+                params.extend([profile_token, profile_token, like_token, like_token])
 
             where_sql = f"WHERE {' AND '.join(where_parts)}" if where_parts else ""
             limit_sql = " LIMIT ?" if limit is not None and limit > 0 else ""
@@ -281,7 +363,9 @@ class AirfoilDb:
                 f"{top_aircraft_expr} AS top_aircraft, "
                 f"{top_usages_expr} AS top_usages, "
                 f"{usage_count_expr} AS usage_count, "
-                f"{autostable_score_expr} AS autostable_score "
+                f"{autostable_score_expr} AS autostable_score, "
+                f"{high_lift_score_expr} AS high_lift_score, "
+                f"{famous_score_expr} AS famous_score "
                 "FROM airfoils a "
                 "LEFT JOIN latest_ratings ar ON ar.airfoil_name = a.name "
                 f"{usage_join_sql}"
