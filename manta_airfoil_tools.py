@@ -1021,13 +1021,19 @@ class App:
 
         advanced_header = ttk.Frame(outer, style="Hero.TFrame", padding=(10, 6))
         advanced_header.pack(fill="x", pady=(0, 8))
-        advanced_header.columnconfigure(1, weight=1)
+        advanced_header.columnconfigure(0, weight=1)
+        advanced_header.columnconfigure(1, weight=0)
 
-        logo_label = ttk.Label(advanced_header, text="Manta Airfoil Tools", style="HeroTitle.TLabel")
-        self._advanced_logo_image = self._load_brand_logo_image(max_logo_width=200)
-        if self._advanced_logo_image is not None:
-            logo_label.configure(image=self._advanced_logo_image, text="")
-        logo_label.grid(row=0, column=0, sticky="w")
+        advanced_left = ttk.Frame(advanced_header, style="Hero.TFrame")
+        advanced_left.grid(row=0, column=0, sticky="w")
+        advanced_title_row = ttk.Frame(advanced_left, style="Hero.TFrame")
+        advanced_title_row.pack(anchor="w")
+        ttk.Label(advanced_title_row, text="Manta Airfoil Tools", style="HeroTitle.TLabel").pack(side="left")
+        ttk.Label(
+            advanced_left,
+            text="Brand: Manta Airlab | Fabio Giuliodori | Duilio.cc",
+            style="HeroSignature.TLabel",
+        ).pack(anchor="w", pady=(2, 0))
         ttk.Label(
             advanced_header,
             text="Advanced Options",
