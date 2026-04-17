@@ -2974,6 +2974,60 @@ class App:
             )
 
         selected_name = self._get_selected_library_profile_name()
+        selected_row = None
+        if selected_name:
+            for row in self._library_browser_rows:
+                if (row.get("name") or "") == selected_name:
+                    selected_row = row
+                    break
+        if selected_row is None and self._library_browser_rows:
+            selected_row = self._library_browser_rows[0]
+
+        if selected_row is not None:
+            bar_items = [
+                ("Performance", "performance_score"),
+                ("Docility", "docility_score"),
+                ("Robustness", "robustness_score"),
+                ("Confidence", "confidence_score"),
+                ("Versatility", "versatility_score"),
+            ]
+            panel_x = 18
+            panel_y = 68
+            panel_right_limit = int(cx - radius - 24)
+            track_w = max(120, min(220, panel_right_limit - panel_x))
+            bar_h = 10
+            row_gap = 28
+            min_fill = 8
+            for idx, (label, key) in enumerate(bar_items):
+                y = panel_y + idx * row_gap
+                score = max(0.0, min(100.0, float(selected_row.get(key) or 0.0)))
+                fill_w = min_fill + (track_w - min_fill) * (score / 100.0)
+                cv.create_text(
+                    panel_x,
+                    y - 2,
+                    text=f"{label} {score:.0f}",
+                    anchor="sw",
+                    fill=self.colors["text"],
+                    font=("Segoe UI", 9, "bold"),
+                )
+                cv.create_rectangle(
+                    panel_x,
+                    y,
+                    panel_x + track_w,
+                    y + bar_h,
+                    fill=self.colors["panel_alt"],
+                    outline=self.colors["border"],
+                    width=1,
+                )
+                cv.create_rectangle(
+                    panel_x,
+                    y,
+                    panel_x + fill_w,
+                    y + bar_h,
+                    fill=self.colors["accent"],
+                    outline="",
+                )
+
         usage_lines = self._library_usage_overlay_lines(selected_name, max_items=20)
         if usage_lines:
             x = width - 16

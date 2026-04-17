@@ -53,6 +53,8 @@ Manta Airlab compresses that workflow into one local app with direct GUI editing
 - Use fluid presets for air, water, salt water, or custom properties
 - Run `XFOIL Simulation` from GUI to override interpolated/tabular coefficients live
 - Choose from thousands of real airfoil profiles, easy to browse and compare, with geometry and aerodynamic data.
+- Use non-exclusive Library Browser preset filters (`Autostable`, `High Lift`, `Famous`, etc.) with threshold sliders.
+- Read per-profile radar bars and open the embedded `Rating docs` link directly from the radar panel.
 
 ![Manta](images/manta.jpg)
 
