@@ -1,0 +1,3 @@
+@{
+    DUILIO_WINSCP_SITE = "your-winscp-stored-site-name"
+}

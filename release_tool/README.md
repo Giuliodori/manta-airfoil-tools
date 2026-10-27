@@ -1,13 +1,48 @@
-# release_tool
+# release tooling
 
-Python helper to create and clean release artifacts for **Manta Airlab**.
+Release helpers to create, sign and publish Windows artifacts for **Manta Airlab**.
 
 Repository: `manta-airfoil-tools`
 
+## Main release flow (Nuitka + signing + duilio.cc)
+
+From repository root:
+
+```bash
+python Action/release_manta_airlab.py
+```
+
+What it does:
+1. Reads `VERSION` and bumps the patch version when `AUTO_BUMP_PATCH = True`
+2. Builds a standalone app with Nuitka
+3. Creates `Output/MantaAirfoilToolsInstaller.exe` with Inno Setup
+4. Signs `Output/MantaAirfoilTools/MantaAirfoilTools.exe` and the installer
+5. Copies installer + manifest into `C:\Users\fabio\OneDrive\DUILIO.CC\www\manta-airfoil-tools\downloads`
+6. Uploads installer + manifest to `https://duilio.cc/manta-airfoil-tools/downloads` through WinSCP
+
+The public download URL used by the site is:
+
+```text
+https://duilio.cc/manta-airfoil-tools/download.php
+```
+
+Local upload config can be created from:
+
+```text
+Action/installer_upload.local.ps1.template
+```
+
 ## Prerequisites
 
-- Python 3.10+
+- Python 3.11+ for the Nuitka release flow
 - Internet access for first dependency install
+- Inno Setup 6
+- Windows SDK `signtool.exe` for signing
+- WinSCP stored session or `DUILIO_WINSCP_SITE` for upload
+
+## Legacy PyInstaller helper
+
+`release_tool/release_tool.py` is kept as the older PyInstaller-oriented build helper.
 
 ## Build executable + installer (Windows)
 

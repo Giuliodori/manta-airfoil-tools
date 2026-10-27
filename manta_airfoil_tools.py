@@ -66,36 +66,36 @@ RATINGS_DOC_URL = "https://github.com/Giuliodori/airfoil-db-maker/blob/main/RATI
 
 THEME_PRESETS = {
     "dark": {
-        "label": "Dark",
+        "label": "Duilio Dark",
         "colors": {
-            "bg": "#141414",
-            "panel": "#1b1b1b",
-            "panel_alt": "#232323",
-            "border": "#303030",
-            "fg": "#ececec",
-            "muted": "#9a9a9a",
-            "accent": "#c2c7cd",
-            "accent_alt": "#a7adb5",
-            "entry": "#101010",
-            "text": "#ececec",
-            "selection": "#2e3238",
-            "plot_bg": "#161616",
-            "grid": "#2f2f2f",
-            "button": "#262626",
-            "button_hover": "#2f2f2f",
-            "button_pressed": "#3a3a3a",
-            "button_text_active": "#ffffff",
-            "hero": "#1a1a1a",
-            "hero_accent": "#b7b7b7",
-            "hero_text": "#f3f3f3",
-            "subtle": "#8c8c8c",
-            "lift": "#4ec9b0",
-            "drag": "#ff7666",
-            "source_db": "#8fb9ff",
-            "source_live": "#5fd88f",
-            "source_fallback": "#f5b967",
-            "plot_fill": "#686d73",
-            "plot_fill_alt": "#8a9097",
+            "bg": "#081323",
+            "panel": "#0f172a",
+            "panel_alt": "#10263d",
+            "border": "#2c5f8b",
+            "fg": "#d6e9ff",
+            "muted": "#9fb6cf",
+            "accent": "#17c3b2",
+            "accent_alt": "#2ee6d2",
+            "entry": "#0a1728",
+            "text": "#dbf4ff",
+            "selection": "#123456",
+            "plot_bg": "#050d18",
+            "grid": "#254766",
+            "button": "#10263d",
+            "button_hover": "#143253",
+            "button_pressed": "#0f2137",
+            "button_text_active": "#031318",
+            "hero": "#0b1220",
+            "hero_accent": "#67e8f9",
+            "hero_text": "#f8fafc",
+            "subtle": "#a8c7e8",
+            "lift": "#4ade80",
+            "drag": "#f87171",
+            "source_db": "#93c5fd",
+            "source_live": "#4ade80",
+            "source_fallback": "#fcd34d",
+            "plot_fill": "#17c3b2",
+            "plot_fill_alt": "#3b82f6",
         },
     },
     "light": {
@@ -376,6 +376,39 @@ class App:
         self.style.configure("TLabel", background=self.colors["panel"], foreground=self.colors["fg"], font=("Segoe UI", 9))
         self.style.configure("TSeparator", background=self.colors["border"])
         self.style.configure(
+            "TPanedwindow",
+            background=self.colors["bg"],
+            borderwidth=0,
+            sashwidth=6,
+        )
+        self.style.configure(
+            "TNotebook",
+            background=self.colors["bg"],
+            borderwidth=0,
+            tabmargins=(0, 0, 0, 0),
+        )
+        self.style.configure(
+            "TNotebook.Tab",
+            background=self.colors["button"],
+            foreground=self.colors["muted"],
+            bordercolor=self.colors["border"],
+            lightcolor=self.colors["button"],
+            darkcolor=self.colors["button"],
+            padding=(12, 7),
+            font=("Segoe UI Semibold", 9),
+        )
+        self.style.map(
+            "TNotebook.Tab",
+            background=[
+                ("selected", self.colors["selection"]),
+                ("active", self.colors["button_hover"]),
+            ],
+            foreground=[
+                ("selected", self.colors["text"]),
+                ("active", self.colors["text"]),
+            ],
+        )
+        self.style.configure(
             "TLabelframe",
             background=self.colors["panel"],
             borderwidth=1,
@@ -483,7 +516,10 @@ class App:
                 ("active", self.colors["button_hover"]),
                 ("pressed", self.colors["button_pressed"]),
             ],
-            foreground=[("active", self.colors["button_text_active"])],
+            foreground=[
+                ("active", self.colors["text"]),
+                ("disabled", self.colors["muted"]),
+            ],
         )
         self.style.configure(
             "Accent.TButton",
@@ -566,20 +602,70 @@ class App:
         self.style.configure(
             "Vertical.TScrollbar",
             background=self.colors["panel_alt"],
-            troughcolor=self.colors["panel"],
+            troughcolor=self.colors["plot_bg"],
             arrowcolor=self.colors["fg"],
             bordercolor=self.colors["border"],
             lightcolor=self.colors["border"],
             darkcolor=self.colors["border"],
+            gripcount=0,
         )
         self.style.configure(
             "Horizontal.TScrollbar",
             background=self.colors["panel_alt"],
-            troughcolor=self.colors["panel"],
+            troughcolor=self.colors["plot_bg"],
             arrowcolor=self.colors["fg"],
             bordercolor=self.colors["border"],
             lightcolor=self.colors["border"],
             darkcolor=self.colors["border"],
+            gripcount=0,
+        )
+        self.style.map(
+            "Vertical.TScrollbar",
+            background=[("active", self.colors["border"])],
+        )
+        self.style.map(
+            "Horizontal.TScrollbar",
+            background=[("active", self.colors["border"])],
+        )
+        self.style.configure(
+            "Horizontal.TProgressbar",
+            background=self.colors["accent"],
+            troughcolor=self.colors["plot_bg"],
+            bordercolor=self.colors["border"],
+            lightcolor=self.colors["accent_alt"],
+            darkcolor=self.colors["accent"],
+        )
+        self.style.configure(
+            "Vertical.TProgressbar",
+            background=self.colors["accent"],
+            troughcolor=self.colors["plot_bg"],
+            bordercolor=self.colors["border"],
+            lightcolor=self.colors["accent_alt"],
+            darkcolor=self.colors["accent"],
+        )
+        self.style.configure(
+            "Treeview",
+            background=self.colors["entry"],
+            fieldbackground=self.colors["entry"],
+            foreground=self.colors["text"],
+            bordercolor=self.colors["border"],
+            lightcolor=self.colors["border"],
+            darkcolor=self.colors["border"],
+            rowheight=24,
+        )
+        self.style.map(
+            "Treeview",
+            background=[("selected", self.colors["selection"])],
+            foreground=[("selected", self.colors["text"])],
+        )
+        self.style.configure(
+            "Treeview.Heading",
+            background=self.colors["panel_alt"],
+            foreground=self.colors["text"],
+            bordercolor=self.colors["border"],
+            lightcolor=self.colors["border"],
+            darkcolor=self.colors["border"],
+            font=("Segoe UI Semibold", 9),
         )
         self.style.configure(
             "KPIValue.TLabel",

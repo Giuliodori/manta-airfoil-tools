@@ -4,6 +4,11 @@ __pycache__/
 
 # Build artifacts
 build/
+Output/
+output/
+release_tooling_nuitka/output/
+release_tooling_nuitka/dist/
+release_tool/dist/
 
 # Keep the packaged executable, ignore the rest of dist
 dist/*
@@ -22,3 +27,35 @@ database/
 xfoil/
 database/_local/
 airfoils_database.db
+
+# Local release configuration and secrets
+*.local
+*.local.*
+Action/installer_upload.local.ps1
+Action/*.local.ps1
+release_tooling_nuitka/**/*.local.ps1
+release_tooling/**/*.local.ps1
+!Action/*.local.ps1.template
+!release_tooling_nuitka/**/*.local.ps1.template
+!release_tooling/**/*.local.ps1.template
+
+# Code signing material and private keys
+*.pfx
+*.p12
+*.pem
+*.key
+*.cer
+*.crt
+*.spc
+*.pvk
+*.sig
+*.signtool.log
+*.timestamp
+
+# Installer / binary release payloads
+*.exe
+*.msi
+*.zip
+*.7z
+*.tar
+*.tar.gz
